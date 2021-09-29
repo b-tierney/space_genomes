@@ -1,0 +1,75 @@
+---
+title: "space_genomes_apit"
+author: "Braden T Tierney"
+date: "9/27/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggtree)
+library(tidyverse)
+library(ggnewscale)
+```
+
+```{r}
+#load, plot, and annotate ggtree 
+setwd('~/Dropbox (HMS)/space_genomes/ap_subproject/')
+
+tree <- read.tree("gtdbtk.unrooted.tree")
+metadata = read.table('metadata.csv',header=T,sep=',') %>% mutate(Assembly = strsplit(Assembly,'\\.') %>% map_chr(1))
+
+rownames(metadata)=metadata$Assembly
+metadata = metadata %>% select(-Assembly,Project,Isolation_Source) %>% mutate(Project = if_else(Project=='','NON-ISS',Project))
+
+metadata$Project = as.factor(metadata$Project)
+metadata$Isolation_Source = as.factor(metadata$Isolation_Source)
+
+p = ggtree(tree,branch.length="none",layout = "circular") + geom_treescale() 
+
+p2=gheatmap(p, metadata %>% select(Project), offset=0, width=.1, colnames=FALSE, legend_title="Isolation Source")+ scale_fill_viridis_d(option="D", name="Isolation Source")  
+
+print(p2)
+ggsave('apit_tree_314.pdf',height=8,width=8)
+```
+
+```{r}
+# load in and visualize mash data
+
+### distances generated with:
+# mash sketch -s 10000 -o mash_sketch bacterial_genomes_actually_pittii/*.fna
+# mash dist mash_sketch.msh mash_sketch.msh > apit_mash.tsv
+
+mashdata = read.table('apit_mash.tsv',header=F,sep='\t') %>% mutate(V1 = strsplit(V1,'/') %>% map_chr(2) %>% strsplit('\\.') %>% map_chr(1))  %>% mutate(V2 = strsplit(V2,'/') %>% map_chr(2) %>% strsplit('\\.') %>% map_chr(1)) %>% select(V1,V2,V3)
+colnames(mashdata) = c('genome_1','genome_2','mash_distance')
+hist(mashdata$mash_distance)
+
+mashdata = mashdata %>% reshape2::dcast(genome_1 ~ genome_2,value.var = 'mash_distance') 
+
+mashdata = left_join(mashdata,metadata %>% rownames_to_column('genome_1') %>% select(genome_1,Project)) %>% mutate(Project = if_else(as.character(Project) == 'Non-ISS','',as.character(Project)) %>% as.factor) %>%  column_to_rownames('genome_1') 
+
+mashdata_annotation = mashdata %>% select(Project)
+mashdata = mashdata %>% select(-Project)
+
+save_pheatmap_pdf <- function(x, filename, width=8, height=8) {
+   stopifnot(!missing(x))
+   stopifnot(!missing(filename))
+   pdf(filename, width=width, height=height)
+   grid::grid.newpage()
+   grid::grid.draw(x$gtable)
+   dev.off()
+}
+
+p = (pheatmap::pheatmap(mat = log(mashdata+0.00001), show_rownames = F,show_colnames = F,annotation_row = mashdata_annotation, cellwidth = 1,cellheight = 1))
+
+save_pheatmap_pdf(p,'mash_distance_heatmap.pdf')
+```
+
+
+
+
+
+
