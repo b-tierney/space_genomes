@@ -1,0 +1,32 @@
+# notes on grabbing isolate metadata
+
+esearch -db biosample -query "Acinetobacter pittii" | esummary | xtract -pattern DocumentSummary -first Title -element Accession -group Attribute -if Attribute@harmonized_name -equals "isolation_source" -element Attribute| grep -e '\t' > environmental_annotations.tsv
+
+while read p <&3; do
+
+echo $p
+
+biosample=$(esearch -db assembly -q $p | elink -db assembly -target biosample -name assembly_biosample  | esummary | grep -i BioSample | grep "<SourceSample>" | cut -f2 -d: | cut -f1 -d'<')
+
+echo -e "$p" '\t' "$biosample" >> assembly_biosample_mapping
+
+done 3<assembly_ids
+
+sed 's/ //g' assembly_biosample_mapping
+
+### then left join assembly_biosample_mapping file and environmental_annotations.tsv files
+
+# code for doing this in R
+
+library(dplyr)
+
+assembly_biosample_mapping = d=read.table('assembly_biosample_mapping',sep='\t',header=F)
+colnames(assembly_biosample_mapping) = c('assembly','biosample')
+environs = read.table('environmental_annotations.tsv',sep='\t')
+colnames(environs) = c('biosample','isolation_source')
+
+merged_data = left_join(assembly_biosample_mapping,environs)
+
+write.csv(merged_data,'environmental_metadata.csv')
+
+# then manually edit

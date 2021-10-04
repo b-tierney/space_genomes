@@ -22,18 +22,34 @@ setwd('~/Dropbox (HMS)/space_genomes/ap_subproject/')
 tree <- read.tree("gtdbtk.unrooted.tree")
 metadata = read.table('metadata.csv',header=T,sep=',') %>% mutate(Assembly = strsplit(Assembly,'\\.') %>% map_chr(1))
 
+environmental_metadata = read.csv('environmental_metadata.csv') %>% mutate(Assembly = strsplit(Assembly,'\\.') %>% map_chr(1))
+
+metadata = left_join(metadata,environmental_metadata)
+
 rownames(metadata)=metadata$Assembly
-metadata = metadata %>% select(-Assembly,Project,Isolation_Source) %>% mutate(Project = if_else(Project=='','NON-ISS',Project))
+metadata = metadata %>% select(-Assembly,Project,isolation_source,space_vs_earth_source) %>% mutate(Project = if_else(Project=='','NON-ISS',Project))
 
 metadata$Project = as.factor(metadata$Project)
-metadata$Isolation_Source = as.factor(metadata$Isolation_Source)
+metadata$isolation_source = as.factor(metadata$isolation_source)
+metadata$space_vs_earth_source = as.factor(metadata$space_vs_earth_source)
+
+new_tip_labels = list()
+for(i in seq(tree$tip.label)){
+   val = tree$tip.label[[i]]
+   new_tip_labels[[i]] = as.character(metadata[val,'isolation_source_cleaned'])
+}
+
+new_tip_labels=unlist(unname(new_tip_labels))
+
+labelmap = data.frame(label = tree$tip.label, newlabel = new_tip_labels)
 
 p = ggtree(tree,branch.length="none",layout = "circular") + geom_treescale() 
 
-p2=gheatmap(p, metadata %>% select(Project), offset=0, width=.1, colnames=FALSE, legend_title="Isolation Source")+ scale_fill_viridis_d(option="D", name="Isolation Source")  
+p2=gheatmap(p, metadata %>% select(space_vs_earth_source), offset=0, width=.1, colnames=FALSE, legend_title="Isolation Source")+ scale_fill_viridis_d(option="D", name="Isolation Source")  
 
-print(p2)
-ggsave('apit_tree_314.pdf',height=8,width=8)
+p3 = p2 %<+% labelmap + geom_tiplab(offset = 5,aes(label=newlabel),size =2, parse=F)
+
+ggsave('apit_tree_314.pdf',height=10,width=10)
 ```
 
 ```{r}
