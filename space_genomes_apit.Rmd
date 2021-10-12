@@ -13,11 +13,13 @@ knitr::opts_chunk$set(echo = TRUE)
 library(ggtree)
 library(tidyverse)
 library(ggnewscale)
+library(reshape2)
+library(pheatmap)
 ```
 
 ```{r}
 #load, plot, and annotate ggtree 
-setwd('~/Dropbox (HMS)/space_genomes/ap_subproject/')
+setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/')
 
 tree <- read.tree("gtdbtk.unrooted.tree")
 metadata = read.table('metadata.csv',header=T,sep=',') %>% mutate(Assembly = strsplit(Assembly,'\\.') %>% map_chr(1))
@@ -27,10 +29,10 @@ environmental_metadata = read.csv('environmental_metadata.csv') %>% mutate(Assem
 metadata = left_join(metadata,environmental_metadata)
 
 rownames(metadata)=metadata$Assembly
-metadata = metadata %>% select(-Assembly,Project,isolation_source,space_vs_earth_source) %>% mutate(Project = if_else(Project=='','NON-ISS',Project))
+metadata = metadata %>% select(-Assembly,Project,isolation_source_cleaned,space_vs_earth_source) %>% mutate(Project = if_else(Project=='','NON-ISS',Project))
 
 metadata$Project = as.factor(metadata$Project)
-metadata$isolation_source = as.factor(metadata$isolation_source)
+metadata$isolation_source = as.factor(metadata$isolation_source_cleaned)
 metadata$space_vs_earth_source = as.factor(metadata$space_vs_earth_source)
 
 new_tip_labels = list()
@@ -47,7 +49,103 @@ p = ggtree(tree,branch.length="none",layout = "circular") + geom_treescale()
 
 p2=gheatmap(p, metadata %>% select(space_vs_earth_source), offset=0, width=.1, colnames=FALSE, legend_title="Isolation Source")+ scale_fill_viridis_d(option="D", name="Isolation Source")  
 
-p3 = p2 %<+% labelmap + geom_tiplab(offset = 5,aes(label=newlabel),size =2, parse=F)
+p3 = p2 %<+% labelmap + geom_tiplab(offset = 5,aes(label=newlabel),size = 2, parse = F)
+
+ggsave('apit_tree_314.pdf',height=10,width=10)
+```
+
+```{r}
+# define clades and select representative 
+setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/')
+
+tree <- read.tree("gtdbtk.unrooted.tree")
+metadata = read.table('metadata.csv',header=T,sep=',') %>% mutate(Assembly = strsplit(Assembly,'\\.') %>% map_chr(1))
+
+environmental_metadata = read.csv('environmental_metadata.csv') %>% mutate(Assembly = strsplit(Assembly,'\\.') %>% map_chr(1))
+
+metadata = left_join(metadata,environmental_metadata) %>% filter(!is.na(isolation_source_cleaned))
+
+rownames(metadata)=metadata$Assembly
+metadata = metadata %>% select(-Assembly,Project,isolation_source_cleaned,space_vs_earth_source) %>% mutate(Project = if_else(Project=='','NON-ISS',Project))
+
+metadata$Project = as.factor(metadata$Project)
+metadata$isolation_source = as.factor(metadata$isolation_source_cleaned)
+metadata$space_vs_earth_source = as.factor(metadata$space_vs_earth_source)
+
+clades_to_sample = tree %>% as.tibble  %>% filter(grepl('C',label)) %>% select(parent) %>% table %>% data.frame %>%filter(Freq > 2) %>% select(-Freq) %>% unlist %>% unname
+
+tibble_tree = tree %>% as.tibble 
+tibble_tree_clades = tibble_tree %>% filter(parent %in% clades_to_sample) 
+tibble_tree_clades = left_join(tibble_tree_clades,metadata %>% rownames_to_column('label'))
+
+space_bugs = metadata %>% rownames_to_column('label') %>% filter(space_vs_earth_source == 'ISS') %>% select(label) %>% unlist %>% unname
+
+tibble_tree_clades = tibble_tree_clades %>% filter(!(label %in% space_bugs))
+
+pick_representative_bug <- function(treedf,nodelabel){
+  treedf_sub = treedf %>% filter(parent == nodelabel) %>% arrange(Scaffolds)
+  treedf_sub_human = treedf_sub %>% filter(human_or_other == 'HUMAN')
+  if(nrow(treedf_sub_human) >0){
+    representative = treedf_sub_human$label[[1]]
+  }
+  else{
+    representative = treedf_sub$label[[1]]
+  }
+  return(representative)
+}
+
+representative_bugs = map(unique(tibble_tree_clades$parent), function(x) pick_representative_bug(tibble_tree_clades,x)) %>% unlist %>% unname
+
+metadata = metadata %>% mutate(for_anvio = if_else(rownames(metadata) %in% c(representative_bugs, space_bugs),'YES','NO'))
+
+rep_bugs_for_anvio = metadata %>% filter(for_anvio == 'YES')
+write.csv(rep_bugs_for_anvio %>% rownames_to_column('assembly') %>% select(assembly,space_vs_earth_source),'representative_and_space_bugs_for_anvio.csv')
+
+new_tip_labels = list()
+for(i in seq(tree$tip.label)){
+   val = tree$tip.label[[i]]
+   new_tip_labels[[i]] = as.character(metadata[val,'isolation_source_cleaned'])
+}
+
+new_tip_labels=unlist(unname(new_tip_labels))
+
+labelmap = data.frame(label = tree$tip.label, newlabel = new_tip_labels)
+
+p = ggtree(tree,branch.length="none",layout = "circular") + geom_treescale() 
+
+p2=gheatmap(p, metadata %>% select(space_vs_earth_source), offset=0, width=.1, colnames=FALSE, legend_title="Isolation Source")+ scale_fill_viridis_d(option="D", name="Isolation Source")  
+
+p3 = p2 %<+% labelmap + geom_tiplab(offset = 7.5,aes(label=newlabel),size = 2, parse = F) + new_scale_fill()
+
+p4 = gheatmap(p3, metadata %>% select(for_anvio), offset=3, width=.1, colnames=FALSE, legend_title="Used in anvio")+ scale_fill_viridis_d(option="A", name="Used in anvio")  
+
+ggsave('apit_tree_314_withanvioannotation.pdf',height=10,width=10)
+```
+
+
+
+tree = makeNodeLabel(tree)
+
+clades = define.clade(tree,method='time',time=50)$clades %>% data.frame %>% rownames_to_column('sample')
+colnames(clades) = c('sample','clade')
+
+clades = clades %>% column_to_rownames('sample')
+
+new_tip_labels = list()
+for(i in seq(tree$tip.label)){
+   val = tree$tip.label[[i]]
+   new_tip_labels[[i]] = as.character(clades[val,'clade'])
+}
+
+new_tip_labels=unlist(unname(new_tip_labels))
+
+labelmap = data.frame(label = tree$tip.label, newlabel = new_tip_labels)
+
+p = ggtree(tree,branch.length="none",layout = "circular") + geom_treescale() 
+
+p2=gheatmap(p, metadata %>% select(space_vs_earth_source), offset=0, width=.1, colnames=FALSE, legend_title="Isolation Source")+ scale_fill_viridis_d(option="D", name="Isolation Source")  
+
+p3 = p2 %<+% labelmap + geom_tiplab(offset = 5,aes(label=newlabel),size = 2, parse = F)
 
 ggsave('apit_tree_314.pdf',height=10,width=10)
 ```
