@@ -2,18 +2,17 @@
 
 # qc paired end, non interleaved metagenomes with bbtools
 
-echo "$basename"_log
-echo $1
-
-touch "$basename"_log
-
-echo $1 >> "$basename"_log
 
 basename=$1
 read1=$2
 read2=$3
 
+echo "$basename"_log
+echo $1
+
 touch "$basename"_log
+
+echo $1 > "$basename"_log
 
 echo 'STARTING QC' >> "$basename"_log
 
@@ -24,6 +23,7 @@ clumpify.sh in=$read1 \
             out2="${basename}"_R2_clumped.fastq.gz \
             dedupe=t \
             dupesubs=2 \
+            qin=33 \
             threads=10 \
             overwrite=true \
             optical=f 2>> "$basename"_log
@@ -72,24 +72,32 @@ bowtie2 -p 10 \
 mv "${basename}"_SAMPLE_hg38removed.1 "${basename}"_R1_clumped_bbduk_hg38removed.fastq.gz
 mv "${basename}"_SAMPLE_hg38removed.2 "${basename}"_R2_clumped_bbduk_hg38removed.fastq.gz
 
-echo 'BOWTIE DONE'
+echo 'BOWTIE DONE' >> "$basename"_log
 
 rm -rf "${basename}"_R1_clumped_bbduk.fastq.gz "${basename}"_R2_clumped_bbduk.fastq.gz
 
+repair.sh in="${basename}"_R1_clumped_bbduk_hg38removed.fastq.gz \
+          in2="${basename}"_R2_clumped_bbduk_hg38removed.fastq.gz \
+          out1="${basename}"_R1_clumped_bbduk_hg38removed_repaired.fastq.gz \
+          out2="${basename}"_R2_clumped_bbduk_hg38removed_repaired.fastq.gz 2>> "$basename"_log
+
+rm -rf "${basename}"_R1_clumped_bbduk_hg38removed.fastq.gz "${basename}"_R2_clumped_bbduk_hg38removed.fastq.gz
+
+echo 'REPAIRING DONE' >> "$basename"_log
+
 tadpole.sh prealloc=1 \
            -Xmx60G \
-           in="${basename}"_R1_clumped_bbduk_hg38removed.fastq.gz \
-           in2="${basename}"_R2_clumped_bbduk_hg38removed.fastq.gz \
-           out="${basename}"_R1_clumped_bbduk_hg38removed_tadpole.fastq.gz \
-           out2="${basename}"_R2_clumped_bbduk_hg38removed_tadpole.fastq.gz \
+           in="${basename}"_R1_clumped_bbduk_hg38removed_repaired.fastq.gz \
+           in2="${basename}"_R2_clumped_bbduk_hg38removed_repaired.fastq.gz \
+           out="${basename}"_R1_clumped_bbduk_hg38removed_repaired_tadpole.fastq.gz \
+           out2="${basename}"_R2_clumped_bbduk_hg38removed_repaired_tadpole.fastq.gz \
            mode=correct \
            threads=10 \
            ecc=t \
            ecco=t 2>> "$basename"_log
 
-rm -rf "${basename}"_R1_clumped_bbduk_hg38removed.fastq.gz "${basename}"_R2_clumped_bbduk_hg38removed.fastq.gz
+rm -rf "${basename}"_R1_clumped_bbduk_hg38removed_repaired.fastq.gz "${basename}"_R2_clumped_bbduk_hg38removed_repaired.fastq.gz
 
 echo 'TADPOLE DONE' >> "$basename"_log
-
 
 echo 'QC COMPLETE' >> "$basename"_log

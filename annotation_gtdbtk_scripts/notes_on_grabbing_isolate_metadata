@@ -1,6 +1,6 @@
 # notes on grabbing isolate metadata
 
-esearch -db biosample -query "Acinetobacter pittii" | esummary | xtract -pattern DocumentSummary -first Title -element Accession -group Attribute -if Attribute@harmonized_name -equals "isolation_source" -element Attribute| grep -e '\t' > environmental_annotations.tsv
+esearch -db biosample -query "Acinetobacter pittii" | esummary | xtract -pattern DocumentSummary -first Title -element Accession -group Attribute -if Attribute@harmonized_name -equals "isolation_source" -element Attribute|grep -e '\t' > environmental_annotations.tsv
 
 while read p <&3; do
 
@@ -27,6 +27,6 @@ colnames(environs) = c('biosample','isolation_source')
 
 merged_data = left_join(assembly_biosample_mapping,environs)
 
-write.csv(merged_data,'environmental_metadata.csv')
+write.csv(merged_data,'environmental_metadata2.csv')
 
 # then manually edit
