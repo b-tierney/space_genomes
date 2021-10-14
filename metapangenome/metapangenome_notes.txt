@@ -1,0 +1,91 @@
+# notes on anvio metapangenome test run
+
+y=a
+for file in *fna;
+
+do
+
+basename=$(echo $file | cut -f1 -d. | sed -e 's/-/_/g' | sed -e 's/_assembled//g')
+
+anvi-script-reformat-fasta --simplify-names --prefix $y -o "$file"_reformatted $file  
+
+y=$(echo "$y" | tr "0-9a-z" "1-9a-z_")
+
+done
+
+cat *_reformatted  > all_contigs.fna
+
+anvi-gen-contigs-database -T 4 -f all_contigs.fna -o ap_isolate_genomes.db -n 'AP isolate genomes'
+
+# run hmms
+anvi-run-hmms -c ap_isolate_genomes.db --num-threads 4
+
+# run cogs
+anvi-run-ncbi-cogs -c ap_isolate_genomes.db -T 4
+
+# generate bowtie index
+bowtie2-build all_contigs.fna ap_isolate_genomes_bowtie
+
+# run bowtie_samples.sh 
+for sample in `awk '{print $1}' samples.txt`
+do
+    if [ "$sample" == "sample" ]; then continue; fi
+    echo $sample
+    bowtie2 --threads 4 \
+            -x ap_isolate_genomes_bowtie \
+            -1 "$sample"_R1_clumped_bbduk_hg38removed_tadpole.fastq.gz \
+            -2 "$sample"_R2_clumped_bbduk_hg38removed_tadpole.fastq.gz \
+            --no-unal \
+            -S $sample.sam
+    samtools view -F 4 -bS $sample.sam > $sample-RAW.bam
+    samtools sort $sample-RAW.bam -o $sample.bam
+    samtools index $sample.bam
+    rm $sample.sam $sample-RAW.bam
+done
+
+# anvio_profile.sh
+for sample in `awk '{print $1}' samples.txt`
+do
+    if [ "$sample" == "sample" ]; then continue; fi
+
+    anvi-profile -c ap_isolate_genomes.db \
+                 -i $sample.bam \
+                 -M 100 \
+                 --skip-SNV-profiling \
+                 --num-threads 4 \
+                 -o $sample
+done
+
+# anvi-merge
+anvi-merge */PROFILE.db \
+           -o ap-MERGED \
+           -c ap_isolate_genomes.db
+
+for split_name in `sqlite3 ap_isolate_genomes.db 'select split from splits_basic_info;'`
+do
+    GENOME=`echo $split_name | cut -f1 -d_`
+    echo -e "$split_name\t$GENOME"
+done > ap_isolate_genomes.txt
+
+anvi-import-collection ap_isolate_genomes.txt \
+                       -c ap_isolate_genomes.db \
+                       -p ap-MERGED/PROFILE.db \
+                       -C Genomes
+
+anvi-summarize -c ap_isolate_genomes.db \
+               -p ap-MERGED/PROFILE.db \
+               -C Genomes \
+               --init-gene-coverages \
+               -o ap-SUMMARY
+
+### GENERATE THE PANGENOME
+
+
+
+
+
+
+
+
+
+
