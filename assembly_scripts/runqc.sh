@@ -2,6 +2,11 @@
 
 # qc paired end, non interleaved metagenomes with bbtools
 
+# you'll arguments are the base file name (eg sample_1) followed by the two paired end files.
+
+# note absolute paths in bowtie2 and bbduk commands.
+
+# adapters.fa file comes from the "atlas metagenome" workflow, available on github
 
 basename=$1
 read1=$2
