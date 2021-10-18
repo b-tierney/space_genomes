@@ -123,39 +123,13 @@ ggsave('apit_tree_314_withanvioannotation.pdf',height=10,width=10)
 ```
 
 
-
-tree = makeNodeLabel(tree)
-
-clades = define.clade(tree,method='time',time=50)$clades %>% data.frame %>% rownames_to_column('sample')
-colnames(clades) = c('sample','clade')
-
-clades = clades %>% column_to_rownames('sample')
-
-new_tip_labels = list()
-for(i in seq(tree$tip.label)){
-   val = tree$tip.label[[i]]
-   new_tip_labels[[i]] = as.character(clades[val,'clade'])
-}
-
-new_tip_labels=unlist(unname(new_tip_labels))
-
-labelmap = data.frame(label = tree$tip.label, newlabel = new_tip_labels)
-
-p = ggtree(tree,branch.length="none",layout = "circular") + geom_treescale() 
-
-p2=gheatmap(p, metadata %>% select(space_vs_earth_source), offset=0, width=.1, colnames=FALSE, legend_title="Isolation Source")+ scale_fill_viridis_d(option="D", name="Isolation Source")  
-
-p3 = p2 %<+% labelmap + geom_tiplab(offset = 5,aes(label=newlabel),size = 2, parse = F)
-
-ggsave('apit_tree_314.pdf',height=10,width=10)
-```
-
 ```{r}
 # load in and visualize mash data
 
 ### distances generated with:
 # mash sketch -s 10000 -o mash_sketch bacterial_genomes_actually_pittii/*.fna
 # mash dist mash_sketch.msh mash_sketch.msh > apit_mash.tsv
+setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/')
 
 mashdata = read.table('apit_mash.tsv',header=F,sep='\t') %>% mutate(V1 = strsplit(V1,'/') %>% map_chr(2) %>% strsplit('\\.') %>% map_chr(1))  %>% mutate(V2 = strsplit(V2,'/') %>% map_chr(2) %>% strsplit('\\.') %>% map_chr(1)) %>% select(V1,V2,V3)
 colnames(mashdata) = c('genome_1','genome_2','mash_distance')
@@ -180,6 +154,25 @@ save_pheatmap_pdf <- function(x, filename, width=8, height=8) {
 p = (pheatmap::pheatmap(mat = log(mashdata+0.00001), show_rownames = F,show_colnames = F,annotation_row = mashdata_annotation, cellwidth = 1,cellheight = 1))
 
 save_pheatmap_pdf(p,'mash_distance_heatmap.pdf')
+
+mashdata_sub = mashdata[space_bugs,space_bugs]
+
+p2 = (pheatmap::pheatmap(mat = log(mashdata_sub+0.00001), show_rownames = F,show_colnames = T,annotation_row = mashdata_annotation, cellwidth = 10,cellheight = 10))
+
+save_pheatmap_pdf(p2,'mash_distance_heatmap_zoomed.pdf')
+
+# find closest earthbound relative, for use in SNP discovery 
+
+mashdata_melted = mashdata %>% rownames_to_column() %>% melt
+reference_bug = mashdata_melted %>% filter(rowname %in% space_bugs, !(variable %in% space_bugs)) %>% group_by(variable) %>% mutate(average_mash_dist = mean(value)) %>% select(-value,-rowname) %>% unique %>% arrange(average_mash_dist) %>% select(variable) %>% head(1) %>% unlist %>% unname %>% as.character()
+print(reference_bug)
+
+# pick an MT1 genome for us in SNP discovery (least similar to all the others)
+
+mt1_bugs = metadata %>% filter(Project=='MT1') %>% rownames %>% unlist %>% unname
+reference_mt1_bug = mashdata_melted %>% filter(rowname %in% space_bugs, variable %in% mt1_bugs) %>% group_by(variable) %>% mutate(average_mash_dist = mean(value)) %>% select(-value,-rowname) %>% unique %>% arrange(desc(average_mash_dist))%>% select(variable) %>% head(1) %>% unlist %>% unname %>% as.character()
+print(reference_mt1_bug)
+
 ```
 
 

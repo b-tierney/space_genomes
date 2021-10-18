@@ -1,21 +1,26 @@
 # notes on anvio metapangenome test run
 
-y=a
+var=( {a..z}{a..z}{a..z} )
+i=0
+rm -rf metapangenome
+
 for file in *fna;
 
 do
 
-basename=$(echo $file | cut -f1 -d. | sed -e 's/-/_/g' | sed -e 's/_assembled//g')
+i=$((i+1))
 
-anvi-script-reformat-fasta --simplify-names --prefix $y -o "$file"_reformatted $file  
+alphavar=${var[i]}
 
-y=$(echo "$y" | tr "0-9a-z" "1-9a-z_")
+anvi-script-reformat-fasta --seq-type NT --simplify-names --prefix $alphavar -o "$file"_reformatted $file  
+
+echo $file $alphavar >> metapangenome_contig_prefix_mapping
 
 done
 
 cat *_reformatted  > all_contigs.fna
 
-anvi-gen-contigs-database -T 4 -f all_contigs.fna -o ap_isolate_genomes.db -n 'AP isolate genomes'
+anvi-gen-contigs-database -T 8 -f all_contigs.fna -o ap_isolate_genomes.db -n 'AP isolate genomes'
 
 # run hmms
 anvi-run-hmms -c ap_isolate_genomes.db --num-threads 4
@@ -27,21 +32,18 @@ anvi-run-ncbi-cogs -c ap_isolate_genomes.db -T 4
 bowtie2-build all_contigs.fna ap_isolate_genomes_bowtie
 
 # run bowtie_samples.sh 
-for sample in `awk '{print $1}' samples.txt`
-do
+while read p; do
+    sample=$(echo $p | cut -f1 -d' ')
+    r1=$(echo $p | cut -f2 -d' ')
+    r2=$(echo $p | cut -f3 -d' ')    
     if [ "$sample" == "sample" ]; then continue; fi
     echo $sample
-    bowtie2 --threads 4 \
-            -x ap_isolate_genomes_bowtie \
-            -1 "$sample"_R1_clumped_bbduk_hg38removed_tadpole.fastq.gz \
-            -2 "$sample"_R2_clumped_bbduk_hg38removed_tadpole.fastq.gz \
-            --no-unal \
-            -S $sample.sam
-    samtools view -F 4 -bS $sample.sam > $sample-RAW.bam
-    samtools sort $sample-RAW.bam -o $sample.bam
-    samtools index $sample.bam
-    rm $sample.sam $sample-RAW.bam
-done
+    bowtie2 --threads 4  -x ap_isolate_genomes_bowtie -1 "$r1" -2 "$r2" --no-unal -S "$sample".sam
+    samtools view -F 4 -bS "$sample".sam > "$sample"-RAW.bam
+    samtools sort "$sample"-RAW.bam -o "$sample".bam
+    samtools index "$sample".bam
+    rm $sample.sam "$sample"-RAW.bam
+done<samples.txt
 
 # anvio_profile.sh
 for sample in `awk '{print $1}' samples.txt`
