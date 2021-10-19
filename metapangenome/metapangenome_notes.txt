@@ -82,6 +82,64 @@ anvi-summarize -c ap_isolate_genomes.db \
 
 ### GENERATE THE PANGENOME
 
+anvi-gen-genomes-storage -i internal_genomes.txt \
+                         -o ap-PAN-GENOMES.db
+
+anvi-pan-genome -g ap-PAN-GENOMES.db \
+                --use-ncbi-blast \
+                --minbit 0.5 \
+                --mcl-inflation 10 \
+                --project-name ap-PAN \
+                --num-threads 10
+
+<collection step>
+
+anvi-summarize -p ap-PAN/ap-PAN-PAN.db \
+               -g ap-GENOMES.db \
+               -C default \
+               -o ap-PAN-SUMMARY
+
+### linking db
+
+anvi-gen-samples-info-database -D ap-METAGENOME-samples-information.txt \
+-R ap-PAN/ap-PAN-samples-order.txt \
+-o ap-METAPAN-SAMPLES.db
+
+### lookin at genes across database
+
+# generate gene-level distribution data for MIT9314:
+anvi-script-gen-distribution-of-genes-in-a-bin -p Prochlorococcus-MERGED/PROFILE.db \
+                                               -c Prochlorococcus-CONTIGS.db \
+                                               -C Genomes \
+                                               --fraction-of-median-coverage 0.25 \
+                                               -b MIT9314 \
+                                               -o MIT9314-ENV-DETECTION.txt
+
+
+# do the same for EQPAC1:
+anvi-script-gen-distribution-of-genes-in-a-bin -p Prochlorococcus-MERGED/PROFILE.db \
+                                               -c Prochlorococcus-CONTIGS.db \
+                                               -C Genomes \
+                                               --fraction-of-median-coverage 0.25 \
+                                               -b EQPAC1 \
+                                               -o EQPAC1-ENV-DETECTION.txt
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
