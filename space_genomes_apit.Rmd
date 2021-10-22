@@ -21,24 +21,18 @@ library(pheatmap)
 #load, plot, and annotate ggtree 
 setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/')
 
-tree <- read.tree("gtdbtk.unrooted.tree")
-metadata = read.table('metadata.csv',header=T,sep=',') %>% mutate(Assembly = strsplit(Assembly,'\\.') %>% map_chr(1))
-
-environmental_metadata = read.csv('environmental_metadata.csv') %>% mutate(Assembly = strsplit(Assembly,'\\.') %>% map_chr(1))
-
-metadata = left_join(metadata,environmental_metadata)
-
+tree <- read.tree("/Users/btt4001/Dropbox (Mason Lab)/space_genomes/ap_subproject/gtdbtk_trees/gtdbk_infer_names/gtdbtk.unrooted.tree")
+metadata = read.table('metadata_20211015.csv',header=T,sep=',') %>% mutate(Assembly = strsplit(ASSEMBLY,'\\.') %>% map_chr(1))
 rownames(metadata)=metadata$Assembly
-metadata = metadata %>% select(-Assembly,Project,isolation_source_cleaned,space_vs_earth_source) %>% mutate(Project = if_else(Project=='','NON-ISS',Project))
+metadata = metadata %>% select(-Assembly,ISOLATION_SOURCE_CLEANED,EARTH_SPACE)
 
-metadata$Project = as.factor(metadata$Project)
-metadata$isolation_source = as.factor(metadata$isolation_source_cleaned)
-metadata$space_vs_earth_source = as.factor(metadata$space_vs_earth_source)
+metadata$ISOLATION_SOURCE_CLEANED = as.factor(metadata$ISOLATION_SOURCE_CLEANED)
+metadata$EARTH_SPACE = as.factor(metadata$EARTH_SPACE)
 
 new_tip_labels = list()
 for(i in seq(tree$tip.label)){
    val = tree$tip.label[[i]]
-   new_tip_labels[[i]] = as.character(metadata[val,'isolation_source_cleaned'])
+   new_tip_labels[[i]] = as.character(metadata[val,'ISOLATION_SOURCE_CLEANED'])
 }
 
 new_tip_labels=unlist(unname(new_tip_labels))
@@ -47,14 +41,88 @@ labelmap = data.frame(label = tree$tip.label, newlabel = new_tip_labels)
 
 p = ggtree(tree,branch.length="none",layout = "circular") + geom_treescale() 
 
-p2=gheatmap(p, metadata %>% select(space_vs_earth_source), offset=0, width=.1, colnames=FALSE, legend_title="Isolation Source")+ scale_fill_viridis_d(option="D", name="Isolation Source")  
+p2=gheatmap(p, metadata %>% select(EARTH_SPACE), offset=0, width=.1, colnames=FALSE, legend_title="Isolation Source")+ scale_fill_viridis_d(option="D", name="Isolation Source")  
 
 p3 = p2 %<+% labelmap + geom_tiplab(offset = 5,aes(label=newlabel),size = 2, parse = F)
 
 ggsave('apit_tree_314.pdf',height=10,width=10)
 ```
 
+
+# alternative trees with only non-space genomes
+
 ```{r}
+
+# no space genomes 
+
+setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/')
+
+tree <- read.tree("/Users/btt4001/Dropbox (Mason Lab)/space_genomes/ap_subproject/gtdbtk_trees/gtdbk_infer_non_space_genomes/gtdbtk.unrooted.tree")
+metadata = read.table('metadata_20211015.csv',header=T,sep=',') %>% mutate(Assembly = strsplit(ASSEMBLY,'\\.') %>% map_chr(1))
+rownames(metadata)=metadata$Assembly
+metadata = metadata %>% select(-Assembly,ISOLATION_SOURCE_CLEANED,EARTH_SPACE)
+
+metadata$ISOLATION_SOURCE_CLEANED = as.factor(metadata$ISOLATION_SOURCE_CLEANED)
+metadata$EARTH_SPACE = as.factor(metadata$EARTH_SPACE)
+
+metadata = metadata %>% mutate(PRIMERS3_IN_SPACE_CLADE = if_else(rownames(metadata) == 'GCA_002143515',1,if_else(rownames(metadata) == 'GCA_002136755',1,0)))
+
+metadata$PRIMERS3_IN_SPACE_CLADE = as.factor(metadata$PRIMERS3_IN_SPACE_CLADE)
+
+new_tip_labels = list()
+for(i in seq(tree$tip.label)){
+   val = tree$tip.label[[i]]
+   new_tip_labels[[i]] = as.character(metadata[val,'ISOLATION_SOURCE_CLEANED'])
+}
+
+new_tip_labels=unlist(unname(new_tip_labels))
+
+labelmap = data.frame(label = tree$tip.label, newlabel = new_tip_labels)
+
+p = ggtree(tree,branch.length="none",layout = "circular") + geom_treescale() 
+
+p2=gheatmap(p, metadata %>% select(PRIMERS3_IN_SPACE_CLADE), offset=0, width=.1, colnames=FALSE, legend_title="Isolation Source")+ scale_fill_viridis_d(option="D", name="PRIMER3 GENOME OF INTEREST")  
+
+p3 = p2 %<+% labelmap + geom_tiplab(offset = 5,aes(label=newlabel),size = 2, parse = F)
+
+ggsave('apit_tree_primers3_no_space.pdf',height=10,width=10)
+
+tree <- read.tree("/Users/btt4001/Dropbox (Mason Lab)/space_genomes/ap_subproject/gtdbtk_trees/gtdbk_infer_non_space_genomes/gtdbtk.unrooted.tree")
+metadata = read.table('metadata_20211015.csv',header=T,sep=',') %>% mutate(Assembly = strsplit(ASSEMBLY,'\\.') %>% map_chr(1))
+rownames(metadata)=metadata$Assembly
+metadata = metadata %>% select(-Assembly,ISOLATION_SOURCE_CLEANED,EARTH_SPACE)
+
+metadata$ISOLATION_SOURCE_CLEANED = as.factor(metadata$ISOLATION_SOURCE_CLEANED)
+metadata$EARTH_SPACE = as.factor(metadata$EARTH_SPACE)
+
+metadata = metadata %>% mutate(PRIMERS3_IN_SPACE_CLADE = if_else(rownames(metadata) == 'GCA_002143515',1,if_else(rownames(metadata) == 'GCA_002136755',1,0)))
+
+metadata$PRIMERS3_IN_SPACE_CLADE = as.factor(metadata$PRIMERS3_IN_SPACE_CLADE)
+
+new_tip_labels = list()
+for(i in seq(tree$tip.label)){
+   val = tree$tip.label[[i]]
+   new_tip_labels[[i]] = as.character(metadata[val,'ASSEMBLY'])
+}
+
+new_tip_labels=unlist(unname(new_tip_labels))
+
+labelmap = data.frame(label = tree$tip.label, newlabel = new_tip_labels)
+
+p = ggtree(tree,branch.length="none",layout = "circular") + geom_treescale() 
+
+p2=gheatmap(p, metadata %>% select(PRIMERS3_IN_SPACE_CLADE), offset=0, width=.1, colnames=FALSE, legend_title="Isolation Source")+ scale_fill_viridis_d(option="D", name="PRIMER3 GENOME OF INTEREST")  
+
+p3 = p2 %<+% labelmap + geom_tiplab(offset = 5,aes(label=newlabel),size = 2, parse = F)
+
+ggsave('apit_tree_primers3_gca_labels.pdf',height=10,width=10)
+
+```
+
+```{r}
+
+###DEFUNCT 
+
 # define clades and select representative 
 setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/')
 
@@ -175,7 +243,26 @@ print(reference_mt1_bug)
 
 ```
 
+```{r}
+# process metapangenome output
 
+
+setwd("~/Dropbox (Mason Lab)/space_genomes/ap_subproject/metapangenome/ap-SUMMARY/bins_across_samples/")
+
+bin_abundance = read.table('abundance.txt',header=T) %>% rename(anvio_name = bins)
+bin_abundance = melt(bin_abundance) %>% mutate(source = if_else(grepl('GLDS',variable),'MT2-METAGENOME','MT1-METAGENOME'))
+
+anvio_real_mapping = read.table('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/metapangenome/ncbi_anvio_mapping.txt',sep='\t',header=T) %>% mutate(ASSEMBLY = strsplit(ASSEMBLY,'\\.') %>% map_chr(1))
+metadata = read.table('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/metadata_20211015.csv',header=T,sep=',')
+
+merged = left_join(bin_abundance,anvio_real_mapping)
+merged = left_join(merged,metadata %>% select(ASSEMBLY,ISOLATION_SOURCE_CLEANED))
+
+merged$variable = as.factor(merged$variable)
+merged$source = as.factor(merged$source)
+
+ggplot(data = merged %>% filter(ISOLATION_SOURCE_CLEANED == 'ISS - MT1'),aes(x = variable, y = value)) + geom_density()
+```
 
 
 

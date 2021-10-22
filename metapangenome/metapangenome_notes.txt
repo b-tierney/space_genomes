@@ -92,41 +92,66 @@ anvi-pan-genome -g ap-PAN-GENOMES.db \
                 --project-name ap-PAN \
                 --num-threads 10
 
-<collection step>
+>>>>>>LOCAL B/C REQUIRES INTERFACE ACCESS<<<<<<
+##### NOW -- DOWNLOAD ANVIO OUTPUT TO LOCAL DATABASE, IDENTIFY GENES, SAVE COLLECTION, CREATE ENVIRONMENTAL METADATA FILES
+
+anvi-display-pan -p ap-PAN/ap-PAN-PAN.db \
+                 -g ap-PAN-GENOMES.db
+
 
 anvi-summarize -p ap-PAN/ap-PAN-PAN.db \
-               -g ap-GENOMES.db \
-               -C default \
-               -o ap-PAN-SUMMARY
+               -g ap-PAN-GENOMES.db \
+               -C default
 
 ### linking db
-
 anvi-gen-samples-info-database -D ap-METAGENOME-samples-information.txt \
 -R ap-PAN/ap-PAN-samples-order.txt \
 -o ap-METAPAN-SAMPLES.db
 
 ### lookin at genes across database
 
-# generate gene-level distribution data for MIT9314:
-anvi-script-gen-distribution-of-genes-in-a-bin -p Prochlorococcus-MERGED/PROFILE.db \
-                                               -c Prochlorococcus-CONTIGS.db \
+# generate gene-level distribution data for MT1 genome:
+anvi-script-gen-distribution-of-genes-in-a-bin -p ap-MERGED/PROFILE.db \
+                                               -c ap_isolate_genomes.db \
                                                -C Genomes \
                                                --fraction-of-median-coverage 0.25 \
-                                               -b MIT9314 \
-                                               -o MIT9314-ENV-DETECTION.txt
+                                               -b aag 
 
-
-# do the same for EQPAC1:
-anvi-script-gen-distribution-of-genes-in-a-bin -p Prochlorococcus-MERGED/PROFILE.db \
-                                               -c Prochlorococcus-CONTIGS.db \
+# do the same for MT2 genome:
+anvi-script-gen-distribution-of-genes-in-a-bin -p ap-MERGED/PROFILE.db \
+                                               -c ap_isolate_genomes.db \
                                                -C Genomes \
                                                --fraction-of-median-coverage 0.25 \
-                                               -b EQPAC1 \
-                                               -o EQPAC1-ENV-DETECTION.txt
+                                               -b aas
+
+# and type strain
+
+# do the same for MT2 genome GCA_017166275:
+anvi-script-gen-distribution-of-genes-in-a-bin -p ap-MERGED/PROFILE.db \
+                                               -c ap_isolate_genomes.db \
+                                               -C Genomes \
+                                               --fraction-of-median-coverage 0.25 \
+                                               -b aab      
 
 
+anvi-interactive -d aab-GENE-COVs.txt \
+                 -A aab-ENV-DETECTION.txt \
+                 --manual \
+                 -p GENES-PROFILE.db \
+                 --title "AP TYPE STRAIN genes MT1/MT2 metagenomes"
 
 
+anvi-interactive -d aag-GENE-COVs.txt \
+                 -A aag-ENV-DETECTION.txt \
+                 --manual \
+                 -p GENES-PROFILE.db \
+                 --title "AP MT1 genes MT1/MT2 metagenomes"
+
+anvi-interactive -d aas-GENE-COVs.txt \
+                 -A aas-ENV-DETECTION.txt \
+                 --manual \
+                 -p GENES-PROFILE.db \
+                 --title "AP MT2 genes MT1/MT2 metagenomes"
 
 
 
