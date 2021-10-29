@@ -4,7 +4,8 @@ library(tidyverse)
 
 data = read.table('apit_earth_v_space_kmers.txt',sep='\t',header=T)
 data_sub = data %>% mutate(by = p.adjust(lrt.pvalue,method='BY')) %>% filter(by <0.05)
-saveRDS(data_sub,'apit_earth_v_space_kmers_sig.rds')
+write.table(data_sub %>% filter(beta>=0) %>% select(-by),'apit_earth_v_space_kmers_sig_pos.tsv',row.names=F)
+write.table(data_sub %>% filter(beta<0) %>% select(-by),'apit_earth_v_space_kmers_sig_neg.tsv',row.names=F)
 
 seqs_pos = data_sub %>% filter(beta>=0) %>% select(variant) %>% unlist %>% unname
 seqs_neg = data_sub %>% filter(beta<=0)%>% select(variant) %>% unlist %>% unname

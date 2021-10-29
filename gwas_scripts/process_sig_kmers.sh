@@ -17,3 +17,9 @@ diamond makedb --db apit_seqs --in clusterRes_rep_seq.fasta
 diamond blastx -q apit_earth_v_space_kmers_sig_seqs_pos.fa --threads 5 --db apit_seqs --out aligned_kmers_pos.txt --outfmt 6 
 diamond blastx -q apit_earth_v_space_kmers_sig_seqs_neg.fa --threads 5 --db apit_seqs --out aligned_kmers_neg.txt --outfmt 6 
 
+cut -f2 aligned_kmers_pos.txt > pos_genes
+cut -f2 aligned_kmers_neg.txt > neg_genes
+
+grep -Ff pos_genes prokka_annotation_data > apit_earth_v_space_kmers_sig_seqs_pos_annotations.tsv
+grep -Ff neg_genes prokka_annotation_data > apit_earth_v_space_kmers_sig_seqs_neg_annotations.tsv
+
