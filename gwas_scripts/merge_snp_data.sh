@@ -20,8 +20,8 @@ done<assembly_biosample_mapping
 
 done
 
-bcftools norm -m - <ref-otheriss_snps.vcf> ref-otheriss_snps-norm.vcf
-bcftools norm -m - <ref-mt1_snps.vcf> > ref-mt1_snps-norm.vcf
-bcftools norm -m - <ref-typestrain_snps.vcf> > ref-typestrain_snps-norm.vcf
-bcftools norm -m - <ref-earth_snps.vcf> > ref-earth_snps-norm.vcf
+#bcftools norm -m - <ref-otheriss_snps.vcf> ref-otheriss_snps-norm.vcf
+#bcftools norm -m - <ref-mt1_snps.vcf> > ref-mt1_snps-norm.vcf
+#bcftools norm -m - <ref-typestrain_snps.vcf> > ref-typestrain_snps-norm.vcf
+#bcftools norm -m - <ref-earth_snps.vcf> > ref-earth_snps-norm.vcf
 

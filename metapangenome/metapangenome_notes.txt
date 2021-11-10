@@ -2,7 +2,6 @@
 
 var=( {a..z}{a..z}{a..z} )
 i=0
-rm -rf metapangenome
 
 for file in *fna;
 

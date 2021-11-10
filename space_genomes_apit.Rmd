@@ -19,9 +19,9 @@ library(pheatmap)
 
 ```{r}
 #load, plot, and annotate ggtree 
-setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/')
+setwd('~/Dropbox (HMS)/space_genomes/ap_subproject/')
 
-tree <- read.tree("/Users/btt4001/Dropbox (Mason Lab)/space_genomes/ap_subproject/gtdbtk_trees/gtdbk_infer_names/gtdbtk.unrooted.tree")
+tree <- read.tree("gtdbtk_trees/gtdbtk_infer_with_bins/gtdbtk.unrooted.tree")
 metadata = read.table('metadata_20211015.csv',header=T,sep=',') %>% mutate(Assembly = strsplit(ASSEMBLY,'\\.') %>% map_chr(1))
 rownames(metadata)=metadata$Assembly
 metadata = metadata %>% select(-Assembly,ISOLATION_SOURCE_CLEANED,EARTH_SPACE)
@@ -45,7 +45,7 @@ p2=gheatmap(p, metadata %>% select(EARTH_SPACE), offset=0, width=.1, colnames=FA
 
 p3 = p2 %<+% labelmap + geom_tiplab(offset = 5,aes(label=newlabel),size = 2, parse = F)
 
-ggsave('apit_tree_314.pdf',height=10,width=10)
+ggsave('apit_tree_316.pdf',height=10,width=10)
 ```
 
 
