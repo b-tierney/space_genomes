@@ -217,7 +217,7 @@ venn.diagram(
 
 setwd('~/Dropbox (HMS)/space_genomes/ap_subproject/gene_catalogs/')
 
-earth_space = read.csv('earth_space_cleaned_fxnl_output.csv') %>% filter(notes != 'bad-chisq')%>% mutate(BY = p.adjust(lrt.pvalue,method = 'BY')) %>% select(af,BY,variant_h2,func,VARTYPE,beta,name) %>% unique
+earth_space = read.csv('earth_space_cleaned_fxnl_output.csv') %>% mutate(BY = p.adjust(lrt.pvalue,method = 'BY')) %>% select(af,BY,variant_h2,func,VARTYPE,beta,name) %>% unique
 flight = read.csv('flight_binary_cleaned_fxnl_output.csv')  %>% mutate(BY = p.adjust(lrt.pvalue,method = 'BY')) %>% select(af,BY,variant_h2,func,VARTYPE,beta,name) %>% unique
 
 for(v in unique(earth_space$VARTYPE)){
