@@ -11,6 +11,7 @@ colnames(d_nn)[2]=gsub('representative_viral_sequences_','',gsub('.tsv','',files
 
 for(f in files[2:length(files)]){
 	d2=read.table(f,header=F) %>% mutate(V3 = V3/V2) %>% select(V1,V3)
+#	d2$V3 = d2$V3/sum(d2$V3)
 	d2_nn=read.table(f,header=F) %>% select(V1,V3)
 	colnames(d2)[2]=gsub('representative_viral_sequences_','',gsub('.tsv','',f))
 	colnames(d2_nn)[2]=gsub('representative_viral_sequences_','',gsub('.tsv','',f))
