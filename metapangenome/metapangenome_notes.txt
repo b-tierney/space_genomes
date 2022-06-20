@@ -2,7 +2,6 @@
 
 var=( {a..z}{a..z}{a..z} )
 i=0
-rm -rf metapangenome
 
 for file in *fna;
 
@@ -46,7 +45,7 @@ while read p; do
 done<samples.txt
 
 # anvio_profile.sh
-for sample in `awk '{print $1}' samples.txt`
+for sample in `awk '{print $1}' "${1}"`
 do
     if [ "$sample" == "sample" ]; then continue; fi
 
@@ -54,43 +53,187 @@ do
                  -i $sample.bam \
                  -M 100 \
                  --skip-SNV-profiling \
-                 --num-threads 4 \
+                 --num-threads 10 \
                  -o $sample
 done
 
-# anvi-merge
-anvi-merge */PROFILE.db \
-           -o ap-MERGED \
-           -c ap_isolate_genomes.db
-
+### get split genome mapping
 for split_name in `sqlite3 ap_isolate_genomes.db 'select split from splits_basic_info;'`
 do
     GENOME=`echo $split_name | cut -f1 -d_`
     echo -e "$split_name\t$GENOME"
 done > ap_isolate_genomes.txt
 
+cut -f2 ap_isolate_genomes.txt | sort | uniq > genome_ids
+
+### make 4 identical contigs databases 
+
+cp ap_isolate_genomes.db ap_isolate_genomes-MT2CREW.db
+cp ap_isolate_genomes.db ap_isolate_genomes-MT2ENV.db
+cp ap_isolate_genomes.db ap_isolate_genomes-MT1ENV.db
+cp ap_isolate_genomes.db ap_isolate_genomes-TWINS.db
+
+### create 4 merged groups, one for each meatgenome class
+anvi-merge mt2-crew*/PROFILE.db \
+           -o ap-MERGED-MT2CREW \
+           -c ap_isolate_genomes-MT2CREW.db
+
+anvi-merge GLDS*/PROFILE.db \
+           -o ap-MERGED-MT2ENV \
+           -c ap_isolate_genomes-MT2ENV.db
+
+anvi-merge SRR*/PROFILE.db \
+           -o ap-MERGED-MT1ENV\
+           -c ap_isolate_genomes-MT1ENV.db
+
+while read p; do mv $p twins-"${p}"; done<twins_ids #create similar prefix for all twins profiles
+
+anvi-merge twins*/PROFILE.db \
+           -o ap-MERGED-TWINS \
+           -c ap_isolate_genomes-TWINS.db
+
+# CREW IMPORT -- SUMMARIZE -- PANGENOME -- METAPANGENOME
+
 anvi-import-collection ap_isolate_genomes.txt \
-                       -c ap_isolate_genomes.db \
-                       -p ap-MERGED/PROFILE.db \
+                       -c ap_isolate_genomes-MT2CREW.db \
+                       -p ap-MERGED-MT2CREW/PROFILE.db \
                        -C Genomes
 
-anvi-summarize -c ap_isolate_genomes.db \
-               -p ap-MERGED/PROFILE.db \
+anvi-summarize -c ap_isolate_genomes-MT2CREW.db \
+               -p ap-MERGED-MT2CREW/PROFILE.db \
                -C Genomes \
                --init-gene-coverages \
-               -o ap-SUMMARY
+               -o ap-SUMMARY-MT2CREW
 
-### GENERATE THE PANGENOME
+./get_internal_genome_files.sh MT2CREW
 
-anvi-gen-genomes-storage -i internal_genomes.txt \
-                         -o ap-PAN-GENOMES.db
+anvi-gen-genomes-storage -i internal_genomes_MT2CREW.txt \
+                         -o ap-PAN-MT2CREW-GENOMES.db
 
-anvi-pan-genome -g ap-PAN-GENOMES.db \
+anvi-pan-genome -g ap-PAN-MT2CREW-GENOMES.db \
                 --use-ncbi-blast \
                 --minbit 0.5 \
                 --mcl-inflation 10 \
-                --project-name ap-PAN \
-                --num-threads 10
+                --project-name ap-PAN-MT2CREW \
+                --num-threads 20
+
+anvi-meta-pan-genome -i internal_genomes_MT2CREW.txt \
+                                           -p ap-PAN-MT2CREW/ap-PAN-MT2CREW-PAN.db \
+                                           -g ap-PAN-MT2CREW-GENOMES.db \
+                                           --fraction-of-median-coverage 0.25   
+
+# MT2ENV IMPORT -- SUMMARIZE -- PANGENOME -- METAPANGENOME
+
+anvi-import-collection ap_isolate_genomes.txt \
+                       -c ap_isolate_genomes-MT2ENV.db \
+                       -p ap-MERGED-MT2ENV/PROFILE.db \
+                       -C Genomes
+
+anvi-summarize -c ap_isolate_genomes-MT2ENV.db \
+               -p ap-MERGED-MT2ENV/PROFILE.db \
+               -C Genomes \
+               --init-gene-coverages \
+               -o ap-SUMMARY-MT2ENV
+
+./get_internal_genome_files.sh MT2ENV
+
+anvi-gen-genomes-storage -i internal_genomes_MT2ENV.txt \
+                         -o ap-PAN-MT2ENV-GENOMES.db
+
+anvi-pan-genome -g ap-PAN-MT2ENV-GENOMES.db \
+                --use-ncbi-blast \
+                --minbit 0.5 \
+                --mcl-inflation 10 \
+                --project-name ap-PAN-MT2ENV \
+                --num-threads 20
+
+anvi-meta-pan-genome -i internal_genomes_MT2ENV.txt \
+                                           -p ap-PAN-MT2ENV/ap-PAN-MT2ENV-PAN.db \
+                                           -g ap-PAN-MT2ENV-GENOMES.db \
+                                           --fraction-of-median-coverage 0.25 
+
+# MT1ENV IMPORT -- SUMMARIZE -- PANGENOME -- METAPANGENOME
+
+anvi-import-collection ap_isolate_genomes.txt \
+                       -c ap_isolate_genomes-MT1ENV.db \
+                       -p ap-MERGED-MT1ENV/PROFILE.db \
+                       -C Genomes
+
+anvi-summarize -c ap_isolate_genomes-MT1ENV.db \
+               -p ap-MERGED-MT1ENV/PROFILE.db \
+               -C Genomes \
+               --init-gene-coverages \
+               -o ap-SUMMARY-MT1ENV
+
+./get_internal_genome_files.sh MT1ENV
+
+anvi-gen-genomes-storage -i internal_genomes_MT1ENV.txt \
+                         -o ap-PAN-MT1ENV-GENOMES.db
+
+anvi-pan-genome -g ap-PAN-MT1ENV-GENOMES.db \
+                --use-ncbi-blast \
+                --minbit 0.5 \
+                --mcl-inflation 10 \
+                --project-name ap-PAN-MT1ENV \
+                --num-threads 20
+
+anvi-meta-pan-genome -i internal_genomes_MT1ENV.txt \
+                                           -p ap-PAN-MT1ENV/ap-PAN-MT1ENV-PAN.db \
+                                           -g ap-PAN-MT1ENV-GENOMES.db \
+                                           --fraction-of-median-coverage 0.25 
+
+# TWINS IMPORT -- SUMMARIZE -- PANGENOME -- METAPANGENOME
+
+anvi-import-collection ap_isolate_genomes.txt \
+                       -c ap_isolate_genomes-TWINS.db \
+                       -p ap-MERGED-TWINS/PROFILE.db \
+                       -C Genomes
+
+anvi-summarize -c ap_isolate_genomes-TWINS.db \
+               -p ap-MERGED-TWINS/PROFILE.db \
+               -C Genomes \
+               --init-gene-coverages \
+               -o ap-SUMMARY-TWINS
+
+./get_internal_genome_files.sh TWINS
+
+anvi-gen-genomes-storage -i internal_genomes_TWINS.txt \
+                         -o ap-PAN-TWINS-GENOMES.db
+
+anvi-pan-genome -g ap-PAN-TWINS-GENOMES.db \
+                --use-ncbi-blast \
+                --minbit 0.5 \
+                --mcl-inflation 10 \
+                --project-name ap-PAN-TWINS \
+                --num-threads 20
+
+anvi-meta-pan-genome -i internal_genomes_TWINS.txt \
+                                           -p ap-PAN-TWINS/ap-PAN-TWINS-PAN.db \
+                                           -g ap-PAN-TWINS-GENOMES.db \
+                                           --fraction-of-median-coverage 0.25 
+
+
+
+
+
+                                        
+
+
+# merge output
+
+anvi-export-misc-data target set items?
+
+
+
+
+
+
+anvi-display-pan -p ap-PAN-MT2CREW/ap-PAN-MT2CREW-PAN.db\
+                 -g ap-PAN-MT2CREW-GENOMES.db \
+                 --title "AP Metapangenome"
+
+
+
 
 >>>>>>LOCAL B/C REQUIRES INTERFACE ACCESS<<<<<<
 ##### NOW -- DOWNLOAD ANVIO OUTPUT TO LOCAL DATABASE, IDENTIFY GENES, SAVE COLLECTION, CREATE ENVIRONMENTAL METADATA FILES
@@ -103,10 +246,20 @@ anvi-summarize -p ap-PAN/ap-PAN-PAN.db \
                -g ap-PAN-GENOMES.db \
                -C default
 
-### linking db
-anvi-gen-samples-info-database -D ap-METAGENOME-samples-information.txt \
--R ap-PAN/ap-PAN-samples-order.txt \
--o ap-METAPAN-SAMPLES.db
+>>>>>><<<<<
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### lookin at genes across database
 
@@ -152,14 +305,6 @@ anvi-interactive -d aas-GENE-COVs.txt \
                  --manual \
                  -p GENES-PROFILE.db \
                  --title "AP MT2 genes MT1/MT2 metagenomes"
-
-
-
-
-
-
-
-
 
 
 

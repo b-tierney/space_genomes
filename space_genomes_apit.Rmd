@@ -12,22 +12,32 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(ggtree)
 library(tidyverse)
+library(hrbrthemes)
+library(tm)
+library(proustr)
+library(ggrepel)
 library(ggnewscale)
+library(VennDiagram)
 library(reshape2)
+library(RColorBrewer)
 library(pheatmap)
+library(ComplexUpset)
+library(cowplot)
+theme_set(theme_cowplot())
+
 ```
 
 ```{r}
 #load, plot, and annotate ggtree 
-setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/')
+setwd('~/Dropbox (HMS)/space_genomes/ap_subproject/')
 
-tree <- read.tree("/Users/btt4001/Dropbox (Mason Lab)/space_genomes/ap_subproject/gtdbtk_trees/gtdbk_infer_names/gtdbtk.unrooted.tree")
+tree <- read.tree("gtdbtk_trees/gtdbtk_infer_with_bins/gtdbtk.unrooted.tree")
 metadata = read.table('metadata_20211015.csv',header=T,sep=',') %>% mutate(Assembly = strsplit(ASSEMBLY,'\\.') %>% map_chr(1))
 rownames(metadata)=metadata$Assembly
-metadata = metadata %>% select(-Assembly,ISOLATION_SOURCE_CLEANED,EARTH_SPACE)
+metadata = metadata %>% select(-Assembly,ISOLATION_SOURCE_CLEANED,HUMAN_FLIGHT_OTHER)
 
 metadata$ISOLATION_SOURCE_CLEANED = as.factor(metadata$ISOLATION_SOURCE_CLEANED)
-metadata$EARTH_SPACE = as.factor(metadata$EARTH_SPACE)
+metadata$HUMAN_FLIGHT_OTHER = as.factor(metadata$HUMAN_FLIGHT_OTHER)
 
 new_tip_labels = list()
 for(i in seq(tree$tip.label)){
@@ -41,155 +51,12 @@ labelmap = data.frame(label = tree$tip.label, newlabel = new_tip_labels)
 
 p = ggtree(tree,branch.length="none",layout = "circular") + geom_treescale() 
 
-p2=gheatmap(p, metadata %>% select(EARTH_SPACE), offset=0, width=.1, colnames=FALSE, legend_title="Isolation Source")+ scale_fill_viridis_d(option="D", name="Isolation Source")  
+p2=gheatmap(p, metadata %>% select(HUMAN_FLIGHT_OTHER), offset=0, width=.1, colnames=FALSE, legend_title="Isolation Source")+ scale_fill_viridis_d(option="D", name="General isolation Source")  
 
 p3 = p2 %<+% labelmap + geom_tiplab(offset = 5,aes(label=newlabel),size = 2, parse = F)
 
-ggsave('apit_tree_314.pdf',height=10,width=10)
+ggsave('apit_tree_316.pdf',height=10,width=10)
 ```
-
-
-# alternative trees with only non-space genomes
-
-```{r}
-
-# no space genomes 
-
-setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/')
-
-tree <- read.tree("/Users/btt4001/Dropbox (Mason Lab)/space_genomes/ap_subproject/gtdbtk_trees/gtdbk_infer_non_space_genomes/gtdbtk.unrooted.tree")
-metadata = read.table('metadata_20211015.csv',header=T,sep=',') %>% mutate(Assembly = strsplit(ASSEMBLY,'\\.') %>% map_chr(1))
-rownames(metadata)=metadata$Assembly
-metadata = metadata %>% select(-Assembly,ISOLATION_SOURCE_CLEANED,EARTH_SPACE)
-
-metadata$ISOLATION_SOURCE_CLEANED = as.factor(metadata$ISOLATION_SOURCE_CLEANED)
-metadata$EARTH_SPACE = as.factor(metadata$EARTH_SPACE)
-
-metadata = metadata %>% mutate(PRIMERS3_IN_SPACE_CLADE = if_else(rownames(metadata) == 'GCA_002143515',1,if_else(rownames(metadata) == 'GCA_002136755',1,0)))
-
-metadata$PRIMERS3_IN_SPACE_CLADE = as.factor(metadata$PRIMERS3_IN_SPACE_CLADE)
-
-new_tip_labels = list()
-for(i in seq(tree$tip.label)){
-   val = tree$tip.label[[i]]
-   new_tip_labels[[i]] = as.character(metadata[val,'ISOLATION_SOURCE_CLEANED'])
-}
-
-new_tip_labels=unlist(unname(new_tip_labels))
-
-labelmap = data.frame(label = tree$tip.label, newlabel = new_tip_labels)
-
-p = ggtree(tree,branch.length="none",layout = "circular") + geom_treescale() 
-
-p2=gheatmap(p, metadata %>% select(PRIMERS3_IN_SPACE_CLADE), offset=0, width=.1, colnames=FALSE, legend_title="Isolation Source")+ scale_fill_viridis_d(option="D", name="PRIMER3 GENOME OF INTEREST")  
-
-p3 = p2 %<+% labelmap + geom_tiplab(offset = 5,aes(label=newlabel),size = 2, parse = F)
-
-ggsave('apit_tree_primers3_no_space.pdf',height=10,width=10)
-
-tree <- read.tree("/Users/btt4001/Dropbox (Mason Lab)/space_genomes/ap_subproject/gtdbtk_trees/gtdbk_infer_non_space_genomes/gtdbtk.unrooted.tree")
-metadata = read.table('metadata_20211015.csv',header=T,sep=',') %>% mutate(Assembly = strsplit(ASSEMBLY,'\\.') %>% map_chr(1))
-rownames(metadata)=metadata$Assembly
-metadata = metadata %>% select(-Assembly,ISOLATION_SOURCE_CLEANED,EARTH_SPACE)
-
-metadata$ISOLATION_SOURCE_CLEANED = as.factor(metadata$ISOLATION_SOURCE_CLEANED)
-metadata$EARTH_SPACE = as.factor(metadata$EARTH_SPACE)
-
-metadata = metadata %>% mutate(PRIMERS3_IN_SPACE_CLADE = if_else(rownames(metadata) == 'GCA_002143515',1,if_else(rownames(metadata) == 'GCA_002136755',1,0)))
-
-metadata$PRIMERS3_IN_SPACE_CLADE = as.factor(metadata$PRIMERS3_IN_SPACE_CLADE)
-
-new_tip_labels = list()
-for(i in seq(tree$tip.label)){
-   val = tree$tip.label[[i]]
-   new_tip_labels[[i]] = as.character(metadata[val,'ASSEMBLY'])
-}
-
-new_tip_labels=unlist(unname(new_tip_labels))
-
-labelmap = data.frame(label = tree$tip.label, newlabel = new_tip_labels)
-
-p = ggtree(tree,branch.length="none",layout = "circular") + geom_treescale() 
-
-p2=gheatmap(p, metadata %>% select(PRIMERS3_IN_SPACE_CLADE), offset=0, width=.1, colnames=FALSE, legend_title="Isolation Source")+ scale_fill_viridis_d(option="D", name="PRIMER3 GENOME OF INTEREST")  
-
-p3 = p2 %<+% labelmap + geom_tiplab(offset = 5,aes(label=newlabel),size = 2, parse = F)
-
-ggsave('apit_tree_primers3_gca_labels.pdf',height=10,width=10)
-
-```
-
-```{r}
-
-###DEFUNCT 
-
-# define clades and select representative 
-setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/')
-
-tree <- read.tree("gtdbtk.unrooted.tree")
-metadata = read.table('metadata.csv',header=T,sep=',') %>% mutate(Assembly = strsplit(Assembly,'\\.') %>% map_chr(1))
-
-environmental_metadata = read.csv('environmental_metadata.csv') %>% mutate(Assembly = strsplit(Assembly,'\\.') %>% map_chr(1))
-
-metadata = left_join(metadata,environmental_metadata) %>% filter(!is.na(isolation_source_cleaned))
-
-rownames(metadata)=metadata$Assembly
-metadata = metadata %>% select(-Assembly,Project,isolation_source_cleaned,space_vs_earth_source) %>% mutate(Project = if_else(Project=='','NON-ISS',Project))
-
-metadata$Project = as.factor(metadata$Project)
-metadata$isolation_source = as.factor(metadata$isolation_source_cleaned)
-metadata$space_vs_earth_source = as.factor(metadata$space_vs_earth_source)
-
-clades_to_sample = tree %>% as.tibble  %>% filter(grepl('C',label)) %>% select(parent) %>% table %>% data.frame %>%filter(Freq > 2) %>% select(-Freq) %>% unlist %>% unname
-
-tibble_tree = tree %>% as.tibble 
-tibble_tree_clades = tibble_tree %>% filter(parent %in% clades_to_sample) 
-tibble_tree_clades = left_join(tibble_tree_clades,metadata %>% rownames_to_column('label'))
-
-space_bugs = metadata %>% rownames_to_column('label') %>% filter(space_vs_earth_source == 'ISS') %>% select(label) %>% unlist %>% unname
-
-tibble_tree_clades = tibble_tree_clades %>% filter(!(label %in% space_bugs))
-
-pick_representative_bug <- function(treedf,nodelabel){
-  treedf_sub = treedf %>% filter(parent == nodelabel) %>% arrange(Scaffolds)
-  treedf_sub_human = treedf_sub %>% filter(human_or_other == 'HUMAN')
-  if(nrow(treedf_sub_human) >0){
-    representative = treedf_sub_human$label[[1]]
-  }
-  else{
-    representative = treedf_sub$label[[1]]
-  }
-  return(representative)
-}
-
-representative_bugs = map(unique(tibble_tree_clades$parent), function(x) pick_representative_bug(tibble_tree_clades,x)) %>% unlist %>% unname
-
-metadata = metadata %>% mutate(for_anvio = if_else(rownames(metadata) %in% c(representative_bugs, space_bugs),'YES','NO'))
-
-rep_bugs_for_anvio = metadata %>% filter(for_anvio == 'YES')
-write.csv(rep_bugs_for_anvio %>% rownames_to_column('assembly') %>% select(assembly,space_vs_earth_source),'representative_and_space_bugs_for_anvio.csv')
-
-new_tip_labels = list()
-for(i in seq(tree$tip.label)){
-   val = tree$tip.label[[i]]
-   new_tip_labels[[i]] = as.character(metadata[val,'isolation_source_cleaned'])
-}
-
-new_tip_labels=unlist(unname(new_tip_labels))
-
-labelmap = data.frame(label = tree$tip.label, newlabel = new_tip_labels)
-
-p = ggtree(tree,branch.length="none",layout = "circular") + geom_treescale() 
-
-p2=gheatmap(p, metadata %>% select(space_vs_earth_source), offset=0, width=.1, colnames=FALSE, legend_title="Isolation Source")+ scale_fill_viridis_d(option="D", name="Isolation Source")  
-
-p3 = p2 %<+% labelmap + geom_tiplab(offset = 7.5,aes(label=newlabel),size = 2, parse = F) + new_scale_fill()
-
-p4 = gheatmap(p3, metadata %>% select(for_anvio), offset=3, width=.1, colnames=FALSE, legend_title="Used in anvio")+ scale_fill_viridis_d(option="A", name="Used in anvio")  
-
-ggsave('apit_tree_314_withanvioannotation.pdf',height=10,width=10)
-```
-
 
 ```{r}
 # load in and visualize mash data
@@ -197,7 +64,7 @@ ggsave('apit_tree_314_withanvioannotation.pdf',height=10,width=10)
 ### distances generated with:
 # mash sketch -s 10000 -o mash_sketch bacterial_genomes_actually_pittii/*.fna
 # mash dist mash_sketch.msh mash_sketch.msh > apit_mash.tsv
-setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/')
+setwd('~/Dropbox (HMS)/space_genomes/ap_subproject/')
 
 mashdata = read.table('apit_mash.tsv',header=F,sep='\t') %>% mutate(V1 = strsplit(V1,'/') %>% map_chr(2) %>% strsplit('\\.') %>% map_chr(1))  %>% mutate(V2 = strsplit(V2,'/') %>% map_chr(2) %>% strsplit('\\.') %>% map_chr(1)) %>% select(V1,V2,V3)
 colnames(mashdata) = c('genome_1','genome_2','mash_distance')
@@ -205,10 +72,10 @@ hist(mashdata$mash_distance)
 
 mashdata = mashdata %>% reshape2::dcast(genome_1 ~ genome_2,value.var = 'mash_distance') 
 
-mashdata = left_join(mashdata,metadata %>% rownames_to_column('genome_1') %>% select(genome_1,Project)) %>% mutate(Project = if_else(as.character(Project) == 'Non-ISS','',as.character(Project)) %>% as.factor) %>%  column_to_rownames('genome_1') 
+mashdata = left_join(mashdata,metadata %>% rownames_to_column('genome_1') %>% select(genome_1,HUMAN_FLIGHT_OTHER)) %>% mutate(HUMAN_FLIGHT_OTHER = as.factor(HUMAN_FLIGHT_OTHER))%>%  column_to_rownames('genome_1') 
 
-mashdata_annotation = mashdata %>% select(Project)
-mashdata = mashdata %>% select(-Project)
+mashdata_annotation = mashdata %>% select(HUMAN_FLIGHT_OTHER)
+mashdata = mashdata %>% select(-HUMAN_FLIGHT_OTHER)
 
 save_pheatmap_pdf <- function(x, filename, width=8, height=8) {
    stopifnot(!missing(x))
@@ -219,51 +86,216 @@ save_pheatmap_pdf <- function(x, filename, width=8, height=8) {
    dev.off()
 }
 
-p = (pheatmap::pheatmap(mat = log(mashdata+0.00001), show_rownames = F,show_colnames = F,annotation_row = mashdata_annotation, cellwidth = 1,cellheight = 1))
+p = (pheatmap::pheatmap(mat = -log(mashdata+0.00001,10), show_rownames = F,show_colnames = F,annotation_row = mashdata_annotation, cellwidth = 1,cellheight = 1))
 
 save_pheatmap_pdf(p,'mash_distance_heatmap.pdf')
 
+space_bugs = read.csv('space_genome_ids',header=F) %>% unlist %>% unname
+
 mashdata_sub = mashdata[space_bugs,space_bugs]
 
-p2 = (pheatmap::pheatmap(mat = log(mashdata_sub+0.00001), show_rownames = F,show_colnames = T,annotation_row = mashdata_annotation, cellwidth = 10,cellheight = 10))
+p2 = (pheatmap::pheatmap(mat = -log(mashdata_sub+0.00001,10), show_rownames = F,show_colnames = T,annotation_row = mashdata_annotation, cellwidth = 10,cellheight = 10))
 
 save_pheatmap_pdf(p2,'mash_distance_heatmap_zoomed.pdf')
 
 # find closest earthbound relative, for use in SNP discovery 
 
-mashdata_melted = mashdata %>% rownames_to_column() %>% melt
-reference_bug = mashdata_melted %>% filter(rowname %in% space_bugs, !(variable %in% space_bugs)) %>% group_by(variable) %>% mutate(average_mash_dist = mean(value)) %>% select(-value,-rowname) %>% unique %>% arrange(average_mash_dist) %>% select(variable) %>% head(1) %>% unlist %>% unname %>% as.character()
-print(reference_bug)
+#mashdata_melted = mashdata %>% rownames_to_column() %>% melt
+#reference_bug = mashdata_melted %>% filter(rowname %in% space_bugs, !(variable %in% space_bugs)) %>% group_by(variable) %>% mutate(average_mash_dist = mean(value)) %>% select(-value,-rowname) %>% unique %>% arrange(average_mash_dist) %>% select(variable) %>% head(1) %>% unlist %>% unname %>% as.character()
+#print(reference_bug)
 
 # pick an MT1 genome for us in SNP discovery (least similar to all the others)
 
-mt1_bugs = metadata %>% filter(Project=='MT1') %>% rownames %>% unlist %>% unname
-reference_mt1_bug = mashdata_melted %>% filter(rowname %in% space_bugs, variable %in% mt1_bugs) %>% group_by(variable) %>% mutate(average_mash_dist = mean(value)) %>% select(-value,-rowname) %>% unique %>% arrange(desc(average_mash_dist))%>% select(variable) %>% head(1) %>% unlist %>% unname %>% as.character()
-print(reference_mt1_bug)
+#mt1_bugs = metadata %>% filter(Project=='MT1') %>% rownames %>% unlist %>% unname
+#reference_mt1_bug = mashdata_melted %>% filter(rowname %in% space_bugs, variable %in% mt1_bugs) %>% group_by(variable) %>% mutate(average_mash_dist = mean(value)) %>% select(-value,-rowname) %>% unique %>% arrange(desc(average_mash_dist))%>% select(variable) %>% head(1) %>% unlist %>% unname %>% as.character()
+#print(reference_mt1_bug)
 
 ```
 
 ```{r}
-# process metapangenome output
+# build upset and cog analysis
+
+setwd('~/Dropbox (HMS)/space_genomes/ap_subproject/gene_catalogs/')
+
+build_upset_plots <- function(clusterfile,prokkamap,metadata,iterations){
+   output_raw = list()
+   output_upset = list()
+   output_upset_singletons = list()
+   data = read.csv(clusterfile,sep='\t',header=F)
+   data = data %>% mutate(val = 1,prokka_id = strsplit(V2,'_') %>% map_chr(1))
+   data_prokka = left_join(data,prokkamap,by=c('prokka_id'='V2'))
+   colnames(data_prokka) = c('congene','rawgene','val','prokka_id','ASSEMBLY')
+   data_prokka = data_prokka %>% select(-rawgene,-prokka_id) %>% unique
+   data_prokka_metadata = left_join(data_prokka,metadata %>% select(Assembly,ISOLATION_SOURCE_CLEANED),by = c('ASSEMBLY'='Assembly'))
+   tokeep = table(metadata$ISOLATION_SOURCE_CLEANED) %>% data.frame() %>% filter(Freq>3) %>% filter(Var1 != 'unknown', Var1 != 'clinical material', Var1!= 'human gut') %>% select(Var1) %>% unlist %>% unname %>% as.character
+   data_prokka_metadata_filtered = data_prokka_metadata %>% filter(ISOLATION_SOURCE_CLEANED %in% tokeep) 
+   for(i in seq(1,iterations)){
+      assemblies_to_keep = data_prokka_metadata_filtered %>% select(-val,-congene) %>% unique %>% group_by(ISOLATION_SOURCE_CLEANED) %>% do(sample_n(.,4)) %>% select(ASSEMBLY) %>% unlist %>% unname
+      
+      data_prokka_metadata_filtered_sub = data_prokka_metadata_filtered %>% filter(ASSEMBLY %in% assemblies_to_keep )%>% select(-ASSEMBLY) %>% unique 
+      
+      data_wide = dcast(data_prokka_metadata_filtered_sub,ISOLATION_SOURCE_CLEANED ~ congene,value.var = "val" )
+      data_wide[is.na(data_wide)] = 0
+      data_wide = t(data_wide %>% column_to_rownames('ISOLATION_SOURCE_CLEANED'))
+      data_wide = data_wide %>% data.frame %>% rownames_to_column('row') %>% select(-row)
+      data_wide[data_wide>0] = 1
+      output_raw[[i]] = data_wide
+      output_upset[[i]] = upset(data_wide,intersect = colnames(data_wide),min_size = 10)
+      output_upset_singletons[[i]] = upset(data_wide  %>% filter(rowSums(data_wide)==1),intersect = colnames(data_wide),min_size = 1)
+      pdf(paste('upset',clusterfile,'_',i,'.pdf',sep=''),width=24,height=8)
+      print(upset(data_wide,intersect = colnames(data_wide),min_size = 10))
+      dev.off()
+      pdf(paste('upset_singletons_',clusterfile,'_',i,'.pdf',sep=''),width=24,height=8)
+      print(upset(data_wide  %>% filter(rowSums(data_wide)==1),intersect = colnames(data_wide),min_size = 1,keep_empty_groups= T))
+      dev.off()
+   }
+   return(list(rawdata = output_raw,upset = output_upset))
+}
+
+# load metadata
+metadata = read.table('../metadata_20211015.csv',header=T,sep=',') %>% mutate(Assembly = strsplit(ASSEMBLY,'\\.') %>% map_chr(1))
+
+# load prokka mapping
+prokkamap = read.csv('prokka_id_mapping',header=F,sep='\t')
+
+cluster30 = build_upset_plots('clusters_30perc_cluster.tsv',prokkamap,metadata,3)
+cluster50 = build_upset_plots('clusters_50perc_cluster.tsv',prokkamap,metadata,3)
+cluster70 = build_upset_plots('clusters_70perc_cluster.tsv',prokkamap,metadata,3)
+cluster90 = build_upset_plots('clusters_90perc_cluster.tsv',prokkamap,metadata,3)
+
+# load cog mapping
+cogmap = read.csv('cog_fx_map')
+
+# load prokka cog data
+procog = read.csv('apit_cog_data.tsv',sep='\t')
+procog_sub = procog %>% select(COG,all_of(c("GCA_017166365","GCA_013449825","GCA_000369045","GCA_002143515","GCA_014168695")))
+colnames(procog_sub) = c('COG','MT1','MT2','TYPE STRAIN','HUMAN INFECTION','WASTEWATER')
+
+procog_sub_melted = melt(procog_sub) %>% filter(value!=0)
+
+colors = brewer.pal(n=5,"Set1") 
+
+venn.diagram(
+  x = list(
+    procog_sub_melted %>% filter(variable=="MT1") %>% select(COG) %>% unlist(), 
+    procog_sub_melted %>% filter(variable=="MT2") %>% select(COG) %>% unlist(), 
+    procog_sub_melted %>% filter(variable=="TYPE STRAIN") %>% select(COG) %>% unlist(),
+    procog_sub_melted %>% filter(variable=="HUMAN INFECTION") %>% select(COG) %>% unlist(),
+    procog_sub_melted %>% filter(variable=="WASTEWATER") %>% select(COG) %>% unlist()
+    ),
+  category.names = c('','','','',''),
+  filename = 'representative_cog_venn.png',
+  output = TRUE ,
+          imagetype="png" ,
+          height = 1500 , 
+          width = 1500 , 
+          resolution = 600,
+          compression = "lzw",
+          lwd = 1,
+          col=colors,
+          fill = c(alpha(colors[[1]],0.3), alpha(colors[[2]],0.3), alpha(colors[[3]],0.3), alpha(colors[[4]],0.3), alpha(colors[[5]],0.3)),
+          cex = 0.5,
+          fontfamily = "sans",
+          cat.cex = 0.3,
+          cat.default.pos = "outer",
+          cat.fontfamily = "sans",
+          cat.col = colors,
+        )
+#left_join(procog_sub,cogmap) %>% select()
+
+#GCA_017166365 -- mt2
+#GCA_013449825 -- mt1
+#GCA_000369045 -- type strain
+#GCA_002143515 -- earth ref
+#GCA_014168695 -- wastewater
 
 
-setwd("~/Dropbox (Mason Lab)/space_genomes/ap_subproject/metapangenome/ap-SUMMARY/bins_across_samples/")
-
-bin_abundance = read.table('abundance.txt',header=T) %>% rename(anvio_name = bins)
-bin_abundance = melt(bin_abundance) %>% mutate(source = if_else(grepl('GLDS',variable),'MT2-METAGENOME','MT1-METAGENOME'))
-
-anvio_real_mapping = read.table('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/metapangenome/ncbi_anvio_mapping.txt',sep='\t',header=T) %>% mutate(ASSEMBLY = strsplit(ASSEMBLY,'\\.') %>% map_chr(1))
-metadata = read.table('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/metadata_20211015.csv',header=T,sep=',')
-
-merged = left_join(bin_abundance,anvio_real_mapping)
-merged = left_join(merged,metadata %>% select(ASSEMBLY,ISOLATION_SOURCE_CLEANED))
-
-merged$variable = as.factor(merged$variable)
-merged$source = as.factor(merged$source)
-
-ggplot(data = merged %>% filter(ISOLATION_SOURCE_CLEANED == 'ISS - MT1'),aes(x = variable, y = value)) + geom_density()
 ```
 
+```{r}
+# fxn-was output
+
+setwd('~/Dropbox (HMS)/space_genomes/ap_subproject/gene_catalogs/')
+
+earth_space = read.csv('earth_space_cleaned_fxnl_output.csv') %>% mutate(BY = p.adjust(lrt.pvalue,method = 'BY')) %>% select(af,BY,variant_h2,func,VARTYPE,beta,name) %>% unique
+flight = read.csv('flight_binary_cleaned_fxnl_output.csv')  %>% mutate(BY = p.adjust(lrt.pvalue,method = 'BY')) %>% select(af,BY,variant_h2,func,VARTYPE,beta,name) %>% unique
+
+for(v in unique(earth_space$VARTYPE)){
+   if(v == 'COG'){
+      earth_space_sub = earth_space %>% filter(func != '') 
+      p = ggplot(data = earth_space_sub %>% filter(VARTYPE == v),aes(x=beta,y=-log(BY,10),size=variant_h2,color=af)) + geom_point(aes(alpha=.5)) + ylab('-log10(adjusted p-value)') + geom_label_repel(data = earth_space_sub%>% filter(VARTYPE == v) %>% arrange(BY) %>% filter(BY<0.05 )%>% group_by(func) %>% slice(1:3),aes(label = name),box.padding   = 0.1, point.padding = 0.1,max.overlaps=100,size=2,segment.color = 'grey50')+geom_hline(yintercept = -log(0.05,5)) + ggtitle(paste(v,'-- EARTH V SPACE')) + facet_wrap(~ func, ncol = 5)
+      ggsave(paste(v,'_earth-space_volcano.pdf',sep=''),width=14,height=14)
+   }
+   if(v != 'COG'){
+      p = ggplot(data = earth_space  %>% filter(VARTYPE == v),aes(x=beta,y=-log(BY,10),color=af,size=variant_h2)) + geom_point(aes(alpha=.5)) + ylab('-log10(adjusted p-value)') + geom_label_repel(data = earth_space%>% filter(VARTYPE == v) %>% arrange(BY) %>% filter(BY<0.05 )%>% group_by(VARTYPE) %>% slice(1:15),aes(label = name),box.padding   = 0.1, point.padding = 0.1,max.overlaps=100,size=3,segment.color = 'grey50')+geom_hline(yintercept = -log(0.05,10)) + ggtitle(paste(v,'-- EARTH V SPACE')) + xlim(-1,1)# + facet_grid(cols=vars(VARTYPE),scales= 'free')
+      ggsave(paste(v,'_earth-space_volcano.pdf',sep=''),width=8,height=8)
+   }
+}
+
+for(v in unique(flight$VARTYPE)){
+   if(v == 'COG'){
+      flight_sub = flight %>% filter(func != '') 
+      p = ggplot(data = flight_sub %>% filter(VARTYPE == v),aes( x=beta,y=-log(BY,10),size=variant_h2,color=af)) + geom_point(aes(alpha=.5)) + ylab('-log10(adjusted p-value)') + geom_label_repel(data = flight_sub%>% filter(VARTYPE == v) %>% arrange(BY) %>% filter(BY<0.05 )%>% group_by(func) %>% slice(1:3),aes(label = name),box.padding   = 0.1, point.padding = 0.1,max.overlaps=100,size=2,segment.color = 'grey50')+geom_hline(yintercept = -log(0.05,5)) + ggtitle(paste(v,'-- MT1 V MT2'))  + facet_wrap(~ func, ncol = 5)
+      ggsave(paste(v,'_flight_volcano.pdf',sep=''),width=14,height=14)
+   }
+   if(v != 'COG'){
+      p = ggplot(data = flight   %>% filter(VARTYPE == v),aes(x=beta,y=-log(BY,10),size = variant_h2,color=af)) + geom_point(aes(alpha=.5)) + ylab('-log10(adjusted p-value)') + geom_label_repel(data = flight%>% filter(VARTYPE == v) %>% arrange(BY) %>% filter(BY<0.05 )%>% group_by(VARTYPE) %>% slice(1:10),aes(label = name),box.padding   = 0.1, point.padding = 0.1,max.overlaps=100,size=3,segment.color = 'grey50')+geom_hline(yintercept = -log(0.05,10)) + xlim(-1,1) + ggtitle(paste(v,'-- MT1 V MT2'))# + facet_grid(cols=vars(VARTYPE),scales= 'free')
+      ggsave(paste(v,'_flight_volcano.pdf',sep=''),width=8,height=8)
+   }
+}
+
+```
+
+```{r}
+# card genes by bug
+setwd('~/Dropbox (HMS)/space_genomes/ap_subproject/card_analysis/')
+
+create_aro_heatmap <- function(abx_col,outputdata){
+   merged_output_aro =  outputdata %>% select(Sample_ID,abx_col) %>% mutate(val = 1)
+   merged_output_aro_wide = dcast(merged_output_aro,Sample_ID ~ get(abx_col), value.var = 'val') %>% column_to_rownames('Sample_ID')
+   merged_output_aro_wide[merged_output_aro_wide>0]=1
+   tokeep = colSums(merged_output_aro_wide) %>% data.frame %>% filter(.>1) %>%rownames %>% unlist %>% unname
+   merged_output_aro_wide_filt = merged_output_aro_wide %>% select(all_of(tokeep)) %>% rownames_to_column('Sample_ID')
+   merged_output_aro_wide_filt_mdat = left_join(merged_output_aro_wide_filt,metadata %>% select(Assembly,HUMAN_FLIGHT_OTHER) %>% mutate(HUMAN_FLIGHT_OTHER = as.factor(HUMAN_FLIGHT_OTHER)),by = c('Sample_ID' = 'Assembly'))
+   
+   pheatmap(merged_output_aro_wide_filt_mdat %>% column_to_rownames('Sample_ID') %>% select(-HUMAN_FLIGHT_OTHER),annotation_row = merged_output_aro_wide_filt_mdat %>% column_to_rownames('Sample_ID') %>% select(HUMAN_FLIGHT_OTHER),show_rownames = FALSE)
+}
+
+save_pheatmap_pdf <- function(x, filename, width=20, height=12) {
+   stopifnot(!missing(x))
+   stopifnot(!missing(filename))
+   pdf(filename, width=width, height=height)
+   grid::grid.newpage()
+   grid::grid.draw(x$gtable)
+   dev.off()
+}
+
+metadata = read.table('../metadata_20211015.csv',header=T,sep=',') %>% mutate(Assembly = strsplit(ASSEMBLY,'\\.') %>% map_chr(1))
+
+card_files = list.files()
+card_files = card_files[grep('.fna.card.txt',card_files)]
+
+output = list()
+for(f in card_files){
+  data = read.csv(f,sep='\t',header=T) %>% select(Drug.Class,Best_Hit_ARO,AMR.Gene.Family,Resistance.Mechanism)
+  sample_id = strsplit(f,'\\.') %>% map_chr(1)
+  data$Sample_ID = sample_id
+  output[[f]] = data
+}
+
+merged_output = bind_rows(output) 
+
+dc = create_aro_heatmap("Drug.Class",merged_output)
+aro = create_aro_heatmap("Best_Hit_ARO",merged_output)
+amrf = create_aro_heatmap("AMR.Gene.Family",merged_output)
+rm = create_aro_heatmap("Resistance.Mechanism",merged_output)
+
+save_pheatmap_pdf(dc,'drug_class_presence_absence.pdf',height=20)
+save_pheatmap_pdf(aro,'aro_presence_absence.pdf')
+save_pheatmap_pdf(amrf,'amrf_presence_absence.pdf')
+save_pheatmap_pdf(rm,'rm_presence_absence.pdf')
 
 
+
+```
 
