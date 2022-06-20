@@ -8,7 +8,7 @@ write.table(data_sub %>% filter(beta>=0) %>% select(-by),'apit_earth_v_space_kme
 write.table(data_sub %>% filter(beta<0) %>% select(-by),'apit_earth_v_space_kmers_sig_neg.tsv',row.names=F)
 
 seqs_pos = data_sub %>% filter(beta>=0) %>% select(variant) %>% unlist %>% unname
-seqs_neg = data_sub %>% filter(beta<=0)%>% select(variant) %>% unlist %>% unname
+seqs_neg = data_sub %>% filter(beta<0)%>% select(variant) %>% unlist %>% unname
 
 output = list()
 count = 0
