@@ -3,6 +3,8 @@
 library(tidyverse)
 library(rtracklayer)
 library(ComplexHeatmap)
+library("Biostrings")
+
 # creating positional heatmaps from snippy output
 
 setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/revisions/snp_calling/')
@@ -14,6 +16,8 @@ snp_id = read.table('bonomo1.tab',header=T,sep='\t')
 # load in file containing gene/fnxl mapping information
 
 annotation_data = readGFF('bonomo1.gff', version=0,columns=NULL, tags=NULL, filter=NULL, nrows=-1,raw_data=FALSE) %>% as.data.frame %>% dplyr::rename(CHR=seqid)
+fa = readDNAStringSet("bonomo1.ffn")
+names(fa) = strsplit(names(fa),' ') %>% map_chr(1)
 
 # load metadata 
 
@@ -27,7 +31,7 @@ metadata_anno = inner_join(metadata_anno,mapping) %>% filter(grepl('MT',HUMAN_FL
 merged = dplyr::left_join(snp_id, annotation_data, by = c("CHR" = "CHR")) %>% filter(POS < end & POS > start)  %>% select(all_of(colnames(snp_id)),start,end,gene,product,locus_tag)
 freq = merged$locus_tag %>% table %>% data.frame
 colnames(freq) = c('locus_tag','number_of_loci')
-merged = left_join(merged,freq,by='locus_tag') %>% mutate(length = end-start)
+merged = left_join(merged,freq,by='locus_tag') %>% mutate(length = end-start + 1)
 merged$length_norm = merged$length/median(merged$length)
 
 # plot gene product by number of mutations
@@ -42,21 +46,22 @@ loci = merged %>% filter(number_of_loci > 10,product != 'hypothetical protein') 
 ht_list = NULL
 
 for(l in loci){
+  seq = fa[[l]]
+  seq = strsplit(as.character(fa[[l]]),'')[[1]]
   sub = merged %>% filter(locus_tag == l) %>% select(all_of(colnames(snp_id)),length,product,start,end) %>% select(-CHR)
   prod = unique(sub$product)
   start = unique(sub$start)
   end = unique(sub$end)
   length = sub$length_norm %>% unique
-  sizelist[[l]] = length
   sub = sub %>% select(-length)
-  temp = data.frame(seq(start,end)) 
-  colnames(temp) = c('POS')
+  temp = data.frame(seq(start,end),seq) 
+  colnames(temp) = c('POS','REFSEQ')
   sub_exp = left_join(temp,sub) %>% mutate(product = prod)
   sub_exp$REF[is.na(sub_exp$REF)] = 'NO SNP FOUND'
   sub_exp[is.na(sub_exp)] = 'NO SNP FOUND'
   sub_exp = sub_exp %>% column_to_rownames('POS')
-  sub_anno_col = sub_exp %>% select(product,REF)
-  sub_exp_hm = sub_exp %>% select(-REF,-product) %>% t %>% as.data.frame%>% rownames_to_column('sample')
+  sub_anno_col = sub_exp %>% select(product,REFSEQ)
+  sub_exp_hm = sub_exp %>% select(-REF,-REFSEQ,-product) %>% t %>% as.data.frame%>% rownames_to_column('sample')
   sub_exp_hm$sample = gsub('_bonomo1_2','',sub_exp_hm$sample)
   sub_exp_hm = inner_join(sub_exp_hm,metadata_anno) %>% select(-sample) %>% column_to_rownames('ASSEMBLY') %>% arrange(desc(HUMAN_FLIGHT_OTHER))
   sub_anno_row = sub_exp_hm %>% select(HUMAN_FLIGHT_OTHER)
@@ -68,8 +73,7 @@ for(l in loci){
   sub_anno_col = sub_anno_col %>% mutate(label = if_else(as.numeric(label)%%500 == 0,label,''))
   anno_col = columnAnnotation(BASE = sub_anno_col$REF,col=list(BASE = colors))
   h=Heatmap(sub_exp_hm,cluster_columns=F,cluster_rows=F,width = length,show_heatmap_legend = F,show_row_names = F,column_title_rot = 270,show_column_names = T,col=colors,border = T,left_annotation = row_anno,column_labels = sub_anno_col$label,column_title = prod,bottom_annotation = anno_col)
-  pdf(paste(l,'bonomo.pdf',sep=''),width=8,height=3)
+  pdf(paste(l,'bonomo.pdf',sep=''),width=8,height=2)
   print(Heatmap(sub_exp_hm,cluster_columns=F,cluster_rows=F,width = length,show_heatmap_legend = F,show_row_names = F,column_title_rot = 0,height=.1,show_column_names = T,col=colors,border = T,left_annotation = row_anno,column_labels = sub_anno_col$label,column_title = prod,bottom_annotation = anno_col))
   dev.off()
-  ht_list = ht_list + h
 }

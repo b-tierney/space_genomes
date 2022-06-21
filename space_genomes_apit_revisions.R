@@ -21,6 +21,10 @@ library(reshape2)
 library(RColorBrewer)
 library(pheatmap)
 library(cowplot)
+library(tidyverse)
+library(rtracklayer)
+library(ComplexHeatmap)
+library("Biostrings")
 
 squish_trans <- function(from, to, factor) {
   
@@ -139,7 +143,7 @@ colnames(prokkamap_prod) = c('term','product')
 prokkamap_cog = read.csv('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/gene_catalogs/gene_cog_mapping.tsv',sep='\t',header=F)
 colnames(prokkamap_cog) = c('term','COG')
 
-regression_output = read.csv('pyseer_output_5pcs.tsv',sep='\t') %>% rename(term=variant) %>% mutate(ADJ = p.adjust(lrt.pvalue,method='bonferroni'))
+regression_output = read.csv('pyseer_output_5pcs.tsv',sep='\t') %>% dplyr::rename(term=variant) %>% mutate(ADJ = p.adjust(lrt.pvalue,method='bonferroni'))
 regression_output = regression_output %>% mutate(odds_ratio = exp(beta))
 regression_output = regression_output %>% mutate(log_odds_ratio = log10(odds_ratio))
 
@@ -147,10 +151,34 @@ regression_output = left_join(regression_output,merged %>% rownames_to_column('t
 
 regression_output = left_join(regression_output,prokkamap_prod)
 regression_output = left_join(regression_output,prokkamap_cog)
-regression_output = regression_output %>% mutate(term = if_else(is.na(product),term,product))
+#regression_output = regression_output %>% mutate(term = if_else(is.na(product),term,product))
 
-ggplot(data = regression_output,aes(x = beta,color=space_fraction,y = -log10(ADJ))) + geom_point(size=2) + theme_bw() +geom_hline(yintercept = -log(0.05,10)) + scale_color_viridis_c(option = "viridis") + geom_label_repel(data = regression_output %>% filter(!grepl('group',term)) %>% filter(ADJ<0.05) %>% arrange(ADJ) %>% head(50),aes(label = term),color='black',box.padding   = 0.1, point.padding = 0.1,alpha=.8,max.overlaps=25,size=4,segment.color = 'grey50') + scale_x_continuous(trans = squish_trans(50,200,50),limits = c(-50,230),labels =c(-50,0,25,50,100,150,200)) 
-ggsave('volcano_5pcs.pdf',width=16,height=16)
+
+p = ggplot(data = regression_output,aes(x = beta,color=space_fraction,y = -log10(ADJ))) + theme_bw() + geom_point(size=2) +geom_hline(yintercept = -log(0.05,10)) + scale_color_viridis_c(option = "viridis") + geom_label_repel(data=regression_output %>% filter(!grepl('group',term)) %>% filter(ADJ<0.05) %>% arrange(ADJ) %>% filter(!duplicated(product))%>%head(75),aes(label=term),alpha=.7,direction='both',color='black') + scale_x_continuous(trans = squish_trans(50,200,50),limits = c(-50,230),labels =c(-50,0,25,50,100,150,200)) 
+ggsave(plot = p, 'volcano_5pcs.pdf',width=12,height=12)
+
+# build out gene significant location map
+regression_output = read.csv('pyseer_output_5pcs.tsv',sep='\t') %>% dplyr::rename(term=variant) %>% mutate(ADJ = p.adjust(lrt.pvalue,method='bonferroni'))
+regression_output = left_join(regression_output,merged %>% rownames_to_column('term'))
+
+mappinginfo = read.csv('gene_presence_absence_space.csv',row.names=1)
+gffstoload = mappinginfo %>% select(-Gene) %>% colnames %>% unlist %>% unname
+for(g in gffstoload){
+  gff = readGFF(paste('space_gffs/',g,'.gff',sep=''), version=0,columns=NULL, tags=NULL, filter=NULL, nrows=-1,raw_data=FALSE) %>% as.data.frame %>% dplyr::rename(CHR=seqid) %>% select(CHR,locus_tag,start,end,gene,product)
+  mappinginfo_sub = mappinginfo %>% select(Gene,all_of(g)) %>% dplyr::rename(locus_tag=g,term=Gene)
+  temp = left_join(gff,mappinginfo_sub)
+  temp = left_join(temp,regression_output %>% select(term,ADJ,space_fraction,earth_fraction)) %>% mutate(significant = if_else(ADJ<0.05,"Significant","0"))
+  temp$significant[temp$significant=='0']='Not significant'
+  temp$significant[temp$product == 'hypothetical protein']='Significant hypothetical protein'
+  forplotsub = temp %>% arrange(CHR,start) %>% mutate(label =if_else(significant == 'Significant',product,''),axis = if_else(label!= '',as.character(start),'')) %>% select(CHR,start,end,axis,significant,label,ADJ,gene,product,space_fraction,earth_fraction)
+  contigs = forplotsub %>% select(CHR,end) %>% group_by(CHR) %>% slice_max(end,n=1) %>% dplyr::rename(length=end)
+  contigs = contigs%>% ungroup %>% mutate(start_position = cumsum(length)) %>% select(-length)
+  contigs = contigs %>% mutate(start_position =start_position - min(start_position))
+  forplotsub = left_join(forplotsub,contigs) %>% filter(!is.na(significant))
+  forplotsub$`Genomic Coordinate` =   forplotsub$start +  forplotsub$start_position 
+  ggplot(forplotsub,aes(x=`Genomic Coordinate`,y=-log10(ADJ),color=significant)) +ylim(0,500)+geom_label_repel(data = forplotsub %>% filter(!grepl('hypothetical',product)) %>% filter(ADJ<0.05,space_fraction == 1,earth_fraction<0.25) %>% arrange(ADJ) ,aes(label = product,fill=`Genomic Coordinate`),color='black',ylim = c(15,1000),box.padding   = 0.1, point.padding = 0.1,alpha=.8,max.overlaps=25,size=3,segment.color = 'grey50') + theme(axis.text.x = element_blank()) +theme_bw()+ geom_point() + geom_hline(yintercept = -log10(0.05)) 
+  ggsave(paste('space_gffs/',g,'.pdf',sep=''),width=20,height=10)
+}
 
 ### snp analysis
 
