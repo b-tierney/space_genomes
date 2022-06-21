@@ -64,7 +64,7 @@ ggsave('apit_tree_316.pdf',height=10,width=10)
 ### distances generated with:
 # mash sketch -s 10000 -o mash_sketch bacterial_genomes_actually_pittii/*.fna
 # mash dist mash_sketch.msh mash_sketch.msh > apit_mash.tsv
-setwd('~/Dropbox (HMS)/space_genomes/ap_subproject/')
+setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/')
 
 mashdata = read.table('apit_mash.tsv',header=F,sep='\t') %>% mutate(V1 = strsplit(V1,'/') %>% map_chr(2) %>% strsplit('\\.') %>% map_chr(1))  %>% mutate(V2 = strsplit(V2,'/') %>% map_chr(2) %>% strsplit('\\.') %>% map_chr(1)) %>% select(V1,V2,V3)
 colnames(mashdata) = c('genome_1','genome_2','mash_distance')
@@ -90,11 +90,12 @@ p = (pheatmap::pheatmap(mat = -log(mashdata+0.00001,10), show_rownames = F,show_
 
 save_pheatmap_pdf(p,'mash_distance_heatmap.pdf')
 
-space_bugs = read.csv('space_genome_ids',header=F) %>% unlist %>% unname
+space_bugs =read.csv('metadata_20211015.csv') %>% filter(grepl('MT',HUMAN_FLIGHT_OTHER)) %>% select(ASSEMBLY) %>% unlist %>% unname
+space_bugs = c(space_bugs,'GCA_002143515','GCA_002136755')
 
 mashdata_sub = mashdata[space_bugs,space_bugs]
 
-p2 = (pheatmap::pheatmap(mat = -log(mashdata_sub+0.00001,10), show_rownames = F,show_colnames = T,annotation_row = mashdata_annotation, cellwidth = 10,cellheight = 10))
+p2 = (pheatmap::pheatmap(mat = log(mashdata_sub+0.00001,10), show_rownames = F,show_colnames = T,annotation_row = mashdata_annotation, cellwidth = 10,cellheight = 10))
 
 save_pheatmap_pdf(p2,'mash_distance_heatmap_zoomed.pdf')
 
