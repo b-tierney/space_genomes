@@ -12,6 +12,7 @@ setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/revisions/snp_calling/'
 # load in snippy core output tab file
 
 snp_id = read.table('bonomo1.tab',header=T,sep='\t')
+snp_id_nonspace = read.table('non_space_bonomo1_snps/bonomo1_nonspace.tab',header=T,sep='\t')
 
 # load in file containing gene/fnxl mapping information
 
@@ -19,6 +20,7 @@ annotation_data = readGFF('bonomo1.gff', version=0,columns=NULL, tags=NULL, filt
 fa = readDNAStringSet("bonomo1.ffn")
 names(fa) = strsplit(names(fa),' ') %>% map_chr(1)
 
+# load metadata 
 # load metadata 
 
 metadata = read.csv('../../metadata_20211015.csv') %>% select(ASSEMBLY,HUMAN_FLIGHT_OTHER) %>% column_to_rownames('ASSEMBLY')
@@ -28,18 +30,33 @@ colnames(mapping) = c('ASSEMBLY','sample')
 metadata_anno = inner_join(metadata_anno,mapping) %>% filter(grepl('MT',HUMAN_FLIGHT_OTHER))
 
 # join and keep only snps in genes
+merged_ns = dplyr::left_join(snp_id_nonspace, annotation_data, by = c("CHR" = "CHR")) %>% filter(POS < end & POS > start)  %>% select(all_of(colnames(snp_id_nonspace)),start,end,gene,product,locus_tag)
+freq = merged_ns$locus_tag %>% table %>% data.frame
+colnames(freq) = c('locus_tag','number_of_loci')
+merged_ns = left_join(merged_ns,freq,by='locus_tag') %>% mutate(length = end-start)
+merged_ns$length_norm = merged_ns$length/median(merged_ns$length)
+
+forfreqplot_ns = merged_ns %>% select(product,number_of_loci) %>% distinct %>% filter(number_of_loci > 10)  %>% arrange(desc(number_of_loci))
+forfreqplot_ns$product = as.factor(forfreqplot_ns$product)
+forfreqplot_ns$product = fct_reorder(forfreqplot_ns$product,forfreqplot_ns$number_of_loci)
+forfreqplot_ns$temp = seq(1,nrow(forfreqplot_ns))
+forfreqplot_ns$source = 'Earth'
+
 merged = dplyr::left_join(snp_id, annotation_data, by = c("CHR" = "CHR")) %>% filter(POS < end & POS > start)  %>% select(all_of(colnames(snp_id)),start,end,gene,product,locus_tag)
 freq = merged$locus_tag %>% table %>% data.frame
 colnames(freq) = c('locus_tag','number_of_loci')
-merged = left_join(merged,freq,by='locus_tag') %>% mutate(length = end-start + 1)
+merged = left_join(merged,freq,by='locus_tag') %>% mutate(length = end-start)
 merged$length_norm = merged$length/median(merged$length)
 
-# plot gene product by number of mutations
 forfreqplot = merged %>% select(product,number_of_loci) %>% distinct %>% filter(number_of_loci > 10)  %>% arrange(desc(number_of_loci))
 forfreqplot$product = as.factor(forfreqplot$product)
 forfreqplot$product = fct_reorder(forfreqplot$product,forfreqplot$number_of_loci)
 forfreqplot$temp = seq(1,nrow(forfreqplot))
-ggplot(forfreqplot,aes(x = temp, y= number_of_loci)) + theme_bw() + geom_bar(stat='identity')  + scale_x_continuous(breaks = forfreqplot$temp,labels=forfreqplot$product)+ theme(axis.text.x = element_text(angle = 60,hjust=1)) + ylab('Number of SNPs') + xlab('')
+forfreqplot$source = 'ISS'
+
+forfreqplot_merged = bind_rows(forfreqplot,forfreqplot_ns)
+
+ggplot(forfreqplot_merged,aes(x = temp, y= number_of_loci,color=source)) + theme_bw() + geom_bar(stat='identity',position='dodge')  + scale_x_continuous(breaks = forfreqplot$temp,labels=forfreqplot$product)+ theme(axis.text.x = element_text(angle = 60,hjust=1),legend.title=element_blank()) + ylab('Number of SNPs') + xlab('')
 ggsave('bonomo_freq.pdf',width=4,height=4)
 # generate sample by sample plots for genes with logs of snps
 loci = merged %>% filter(number_of_loci > 10,product != 'hypothetical protein') %>% select(locus_tag,number_of_loci) %>% distinct %>% arrange(desc(number_of_loci)) %>% head(10)  %>% select(locus_tag) %>% unique %>% unlist %>% unname

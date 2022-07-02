@@ -150,12 +150,11 @@ regression_output = regression_output %>% mutate(log_odds_ratio = log10(odds_rat
 regression_output = left_join(regression_output,merged %>% rownames_to_column('term'))
 
 regression_output = left_join(regression_output,prokkamap_prod)
-regression_output = left_join(regression_output,prokkamap_cog)
+#regression_output = left_join(regression_output,prokkamap_cog)
 #regression_output = regression_output %>% mutate(term = if_else(is.na(product),term,product))
 
-
-p = ggplot(data = regression_output,aes(x = beta,color=space_fraction,y = -log10(ADJ))) + theme_bw() + geom_point(size=2) +geom_hline(yintercept = -log(0.05,10)) + scale_color_viridis_c(option = "viridis") + geom_label_repel(data=regression_output %>% filter(!grepl('group',term)) %>% filter(ADJ<0.05) %>% arrange(ADJ) %>% filter(!duplicated(product))%>%head(75),aes(label=term),alpha=.7,direction='both',color='black') + scale_x_continuous(trans = squish_trans(50,200,50),limits = c(-50,230),labels =c(-50,0,25,50,100,150,200)) 
-ggsave(plot = p, 'volcano_5pcs.pdf',width=12,height=12)
+p = ggplot(data = regression_output,aes(x = beta,color=space_fraction,y = -log10(ADJ))) + theme_bw() + geom_point(size=4) +geom_hline(yintercept = -log(0.05,10)) + scale_color_viridis_c(option = "viridis") + geom_label_repel(data=regression_output %>% filter(!grepl('group',term)) %>% filter(ADJ<0.05) %>% arrange(ADJ) %>% filter(!duplicated(product)) %>% head(50),aes(label=product),size=8,alpha=.7,min.segment.length = .1,direction='both',color='black') + scale_x_continuous(trans = squish_trans(50,200,50),limits = c(-50,230),labels =c(-50,0,25,50,100,150,200))  + theme(axis.text.x = element_text(size = 20),axis.text.y = element_text(size = 20),axis.title.x = element_text(size = 30),axis.title.y = element_text(size = 30))
+ggsave(plot = p, 'volcano_5pcs.pdf',width=30,height=30)
 
 # build out gene significant location map
 regression_output = read.csv('pyseer_output_5pcs.tsv',sep='\t') %>% dplyr::rename(term=variant) %>% mutate(ADJ = p.adjust(lrt.pvalue,method='bonferroni'))
@@ -176,8 +175,8 @@ for(g in gffstoload){
   contigs = contigs %>% mutate(start_position =start_position - min(start_position))
   forplotsub = left_join(forplotsub,contigs) %>% filter(!is.na(significant))
   forplotsub$`Genomic Coordinate` =   forplotsub$start +  forplotsub$start_position 
-  ggplot(forplotsub,aes(x=`Genomic Coordinate`,y=-log10(ADJ),color=significant)) +ylim(0,500)+geom_label_repel(data = forplotsub %>% filter(!grepl('hypothetical',product)) %>% filter(ADJ<0.05,space_fraction == 1,earth_fraction<0.25) %>% arrange(ADJ) ,aes(label = product,fill=`Genomic Coordinate`),color='black',ylim = c(15,1000),box.padding   = 0.1, point.padding = 0.1,alpha=.8,max.overlaps=25,size=3,segment.color = 'grey50') + theme(axis.text.x = element_blank()) +theme_bw()+ geom_point() + geom_hline(yintercept = -log10(0.05)) 
-  ggsave(paste('space_gffs/',g,'.pdf',sep=''),width=20,height=10)
+  ggplot(forplotsub,aes(x=`Genomic Coordinate`,y=-log10(ADJ),color=significant))+ geom_point() +geom_label_repel(data = forplotsub %>% filter(!grepl('hypothetical',product)) %>% filter(ADJ<0.05,space_fraction == 1,earth_fraction<0.5) %>% arrange(ADJ) ,aes(label = gene),color='black',box.padding   = 0.1, point.padding = .1,alpha=.8,size=5,segment.color = 'grey50',label.padding = .1,min.segment.length = .1) + theme(axis.text.x = element_blank()) +theme_bw()+ geom_hline(yintercept = -log10(0.05)) 
+  ggsave(paste('space_gffs/',g,'.pdf',sep=''),width=20,height=5)
 }
 
 ### snp analysis
@@ -224,7 +223,7 @@ setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/revisions/tree_full_dat
 tree <- read.tree("raxml_run1/RAxML_bestTree.roary")
 metadata = read.table('../../metadata_20211015.csv',header=T,sep=',') %>% mutate(Assembly = strsplit(ASSEMBLY,'\\.') %>% map_chr(1))
 rownames(metadata)=metadata$Assembly
-metadata = metadata %>% select(-Assembly,ISOLATION_SOURCE_CLEANED,HUMAN_FLIGHT_OTER)
+metadata = metadata %>% select(-Assembly,ISOLATION_SOURCE_CLEANED,HUMAN_FLIGHT_OTHER)
 
 metadata$ISOLATION_SOURCE_CLEANED = as.factor(metadata$ISOLATION_SOURCE_CLEANED)
 metadata$HUMAN_FLIGHT_OTHER = as.factor(metadata$HUMAN_FLIGHT_OTHER)
@@ -250,6 +249,11 @@ tips = labelmap %>% filter(grepl('MT',newlabel)) %>% select(label) %>% unlist %>
 
 viewClade(p2, MRCA(p2, .node1=c(tips,'GCA_001415895')))%<+% labelmap+ geom_tiplab(offset = -.03,aes(label=newlabel),size = 3, parse = F,align = T)
 ggsave('zoomed_clade.pdf')
+
+# get nodes for snp tree
+
+snptreenodes= offspring(bar,MRCA(p2, .node1=c(tips,'GCA_001415895'))) %>% filter(!is.na(label)) %>% select(label) %>% filter(!(label %in% space_ids))
+write.table(as.data.frame(snptreenodes),'snp_tree_nodes',quote=F,sep='\t',row.names=F)
 
 p = ggtree(tree,branch.length = 'none',layout='circular') 
 
