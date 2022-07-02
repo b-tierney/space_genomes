@@ -249,7 +249,7 @@ for(v in unique(flight$VARTYPE)){
 
 ```{r}
 # card genes by bug
-setwd('~/Dropbox (HMS)/space_genomes/ap_subproject/card_analysis/')
+setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/card_analysis/')
 
 create_aro_heatmap <- function(abx_col,outputdata){
    merged_output_aro =  outputdata %>% select(Sample_ID,abx_col) %>% mutate(val = 1)
@@ -300,3 +300,108 @@ save_pheatmap_pdf(rm,'rm_presence_absence.pdf')
 
 ```
 
+```{r}
+# metapan 
+
+setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/metapan_bootstrapped_alignment/')
+
+isolate_metadata = read.csv('../metadata_20211015.csv')
+metagenomic_metadata = read.csv('../metagenome_metadata_update.csv') %>% mutate(METAGENOME_SOURCE = paste(COHORT,SITE,sep='-'))
+sampleidmap = read.table('sample_id_mapping',sep='\t',header=F) %>% select(V1,V2) %>% mutate(V2 = strsplit(V2, ' \\./') %>% map_chr(1) %>% gsub('_R1_clumped_bbduk_hg38removed_repaired_tadpole.fastq.gz','',.) %>% gsub('\\./','',.) %>%gsub('/','-',.))
+colnames(sampleidmap) = c('NEWNAME','SAMPLE_ID')
+metagenomic_metadata = left_join(metagenomic_metadata,sampleidmap) %>% mutate(SAMPLE_ID = if_else(!is.na(NEWNAME),NEWNAME,SAMPLE_ID)) %>% select(-NEWNAME)
+
+isolate_alignment_data = read.table('genome_metagenome_alignment_data_newassemblies_nojc.tsv',sep='\t',header=F) %>% mutate(V1=strsplit(V1,'\\.') %>% map_chr(1))
+colnames(isolate_alignment_data) = c('ASSEMBLY','SAMPLE_ID','raw_counts','sample_read_counts','fraction_aligned')
+
+alignment_data_metagenomic_metadata = left_join(isolate_alignment_data,metagenomic_metadata) 
+alignment_data_fullmdat = left_join(alignment_data_metagenomic_metadata,isolate_metadata %>% select(ASSEMBLY,ISOLATION_SOURCE_CLEANED) %>% unique) %>% select(METAGENOME_SOURCE,ISOLATION_SOURCE_CLEANED,PMA_TREATMENT,raw_counts,fraction_aligned,FLIGHT,ASSEMBLY,SAMPLE_ID) %>% dplyr::rename(GENOME_SOURCE=ISOLATION_SOURCE_CLEANED) %>% mutate(GENOME_SOURCE=if_else(is.na(GENOME_SOURCE),'A_PITTII_CORE_ISS_GENES',toupper(GENOME_SOURCE)))%>% mutate(GENOME_SOURCE=if_else(GENOME_SOURCE == 'CEREBROSPINAL FLUID','TYPE STRAIN',toupper(GENOME_SOURCE)))
+
+alignment_data_fullmdat$METAGENOME_SOURCE = factor(alignment_data_fullmdat$METAGENOME_SOURCE,levels=c('MT1-ENV','MT2-ENV',"MT2-CREW-SALIVA","MT2-CREW-MOUTH","MT2-CREW-NASAL","MT2-CREW-EAR","MT2-CREW-POOL","TWINS-GUT","TWINS-SALIVA"))
+
+# load in that coverage information
+
+reflengths = read.table('reference_genome_lengths.tsv',sep='\t')
+colnames(reflengths) = c('ASSEMBLY','GENOME_LENGTH')
+
+coverageinfo = read.table('coverage_cleaned',sep='\t')
+colnames(coverageinfo) = c('ASSEMBLY','SAMPLE_ID','COVERAGE')
+
+coverageinfo = left_join(reflengths,coverageinfo,by='ASSEMBLY')
+coverageinfo = coverageinfo %>% mutate(`PERCENT COVERED` = (COVERAGE/GENOME_LENGTH)*100)
+
+alignment_data_fullmdat = alignment_data_fullmdat %>% mutate(PMA_TREATMENT= if_else(PMA_TREATMENT == '','NO PMA',PMA_TREATMENT))
+
+alignment_data_fullmdat = inner_join(alignment_data_fullmdat,coverageinfo)
+
+alignment_data_fullmdat$`PERCENT COVERED BIN` <- cut(alignment_data_fullmdat$`PERCENT COVERED`,breaks = c(0,10,20,30,40,50,100))
+
+#isolatenames <- list(
+#  'ISS-MT1'="GENOMES ISOLATED FROM MT1 MISSION",
+#  'MT1-BIN'="GENOME BINS FROM MT1 METAGENOMES",
+#  'ISS-MT2'="GENOMES ISOLATED FROM MT2 MISSION",
+#  'TYPE STRAIN'="TYPE STRAIN GENOME"
+#)
+
+#isolate_labeller <- function(variable,value){
+#  return(isolatenames[value])
+#}
+
+ggplot(data = alignment_data_fullmdat %>% filter(grepl('ENV',METAGENOME_SOURCE),GENOME_SOURCE == 'MT1-BIN' ), aes(x = METAGENOME_SOURCE,fill=METAGENOME_SOURCE,shape =ASSEMBLY, y = log(fraction_aligned+0.00001))) + geom_quasirandom(aes(color=`PERCENT COVERED BIN`),size=3) + xlab('') + ggtitle('Read alignment to A. Pittii genome bins vs the A. Pittii Type Strain')+ theme(legend.position = "bottom") + stat_compare_means(comparisons = list(c('MT1-ENV','MT2-ENV'))) + scale_color_viridis_d()
+ggsave('aligned_reads.pdf',width=8,height=5)
+
+alignment_data_fullmdat_sub = alignment_data_fullmdat %>% filter(FLIGHT != -1, !is.na(FLIGHT))
+
+my_comparisons <- list(c(3,4),c(7, 1))
+
+ggplot(data = alignment_data_fullmdat_sub, aes(group = FLIGHT,x=FLIGHT,y = log(fraction_aligned+0.00001))) + geom_quasirandom() + geom_line() + geom_violin(alpha=.7)+ facet_grid(rows=vars(GENOME_SOURCE)) + xlab('') + ggtitle('A. pittii abundance by MT2 flight') + stat_compare_means(comparisons=my_comparisons,method = 'wilcox.test')  + scale_x_continuous("FLIGHT", labels = as.character(alignment_data_fullmdat_sub$FLIGHT), breaks = alignment_data_fullmdat_sub$FLIGHT)+ stat_summary(fun = "mean",geom = "crossbar",color = "black") 
+
+ggsave('flight_by_flight_succession.pdf',width=8,height=6)
+
+forhm = alignment_data_fullmdat_sub %>% select(ASSEMBLY,SAMPLE_ID,METAGENOME_SOURCE,GENOME_SOURCE,`PERCENT COVERED`,fraction_aligned)
+annocols = alignment_data_fullmdat_sub %>% select(ASSEMBLY,GENOME_SOURCE) %>% distinct %>% column_to_rownames('ASSEMBLY')
+forhm_wide = dcast(data = forhm %>% select(ASSEMBLY,SAMPLE_ID,fraction_aligned,METAGENOME_SOURCE),SAMPLE_ID+METAGENOME_SOURCE~ASSEMBLY ,value.var = 'fraction_aligned') %>% column_to_rownames("SAMPLE_ID")
+annorows = forhm_wide %>% select(METAGENOME_SOURCE)
+r = rowAnnotation(`METAGENOME SOURCE` = annorows$METAGENOME_SOURCE)
+c = columnAnnotation(`A PITTII GENOME SOURCE` = annocols$GENOME_SOURCE)
+
+forhm_wide = forhm_wide %>% select(rownames(annocols))
+
+Heatmap(forhm_wide,left_annotation = r,top_annotation = c,show_row_names = F, show_column_names = F, cluster_columns=F,cluster_rows=F)
+
+```
+
+
+```{r}
+
+setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/metapan_bootstrapped_alignment/')
+
+data=read.csv('merged_bracken.tsv',sep='\t',header=F)
+data = data %>% filter(V1 == 'Acinetobacter pittii' | V1 =='name')
+colnames(data) = gsub('\\.bracken_frac','',colnames(data))
+data_t = t(as.data.frame(data))
+colnames(data_t) = data_t[1,]
+data_t = data_t[2:nrow(data_t),]
+data_t = data_t %>% as.data.frame %>% filter(grepl('frac',name))
+data_t[,2] = as.numeric(data_t[,2])
+data_t$name = gsub('\\.bracken_frac','',data_t$name)
+colnames(data_t) = c('SAMPLE_ID','abundance')
+
+metagenomic_metadata = read.csv('../metagenome_metadata_update.csv') %>% mutate(METAGENOME_SOURCE = paste(COHORT,SITE,sep='-'))
+sampleidmap = read.table('sample_id_mapping',sep='\t',header=F) %>% select(V1,V2) %>% mutate(V2 = strsplit(V2, ' \\./') %>% map_chr(1) %>% gsub('_R1_clumped_bbduk_hg38removed_repaired_tadpole.fastq.gz','',.) %>% gsub('\\./','',.) %>%gsub('/','-',.))
+colnames(sampleidmap) = c('NEWNAME','SAMPLE_ID')
+metagenomic_metadata = left_join(metagenomic_metadata,sampleidmap) %>% mutate(SAMPLE_ID = if_else(!is.na(NEWNAME),NEWNAME,SAMPLE_ID)) %>% select(-NEWNAME)
+
+merged = left_join(data_t,metagenomic_metadata)
+
+merged$METAGENOME_SOURCE = factor(merged$METAGENOME_SOURCE,levels=c('MT1-ENV','MT2-ENV',"MT2-CREW-SALIVA","MT2-CREW-MOUTH","MT2-CREW-NASAL","MT2-CREW-EAR","MT2-CREW-POOL","TWINS-GUT","TWINS-SALIVA"))
+
+merged = merged %>% mutate(PMA_TREATMENT= if_else(PMA_TREATMENT == '','NO PMA',PMA_TREATMENT))
+
+ggplot(data = merged,aes(x = METAGENOME_SOURCE,color=PMA_TREATMENT, fill = PMA_TREATMENT,y = log(abundance+0.00001))) + geom_boxplot(alpha = .5) + geom_quasirandom(dodge.width = .8)+ theme(axis.text.x = element_text(angle = 45, vjust = 1,hjust = 1,size=10)) + ylab("log10(relative abundance)") + xlab('') + ggtitle('Acinetobacter pittii relative abundance across metagenome type') + stat_compare_means(comparisons = list(c('MT1-ENV','MT2-ENV')),method = 'wilcox.test')
+ggsave('ap_abundance_by_metagenome.pdf',width=8,height=5)
+
+ggplot(data = merged%>% filter(METAGENOME_SOURCE == 'MT1-ENV' |METAGENOME_SOURCE == 'MT2-ENV' ),aes(x = METAGENOME_SOURCE,color=PMA_TREATMENT, fill = PMA_TREATMENT,y = log(abundance+0.00001))) + geom_boxplot(alpha = .5) + geom_quasirandom(dodge.width = .8)+ theme(axis.text.x = element_text(angle = 45, vjust = 1,hjust = 1,size=10)) + ylab("log10(relative abundance)") + xlab('') + ggtitle('Acinetobacter pittii relative abundance across metagenome type') + stat_compare_means()
+ggsave('ap_abundance_by_metagenome_pma.pdf',width=8,height=5)
+
+```
