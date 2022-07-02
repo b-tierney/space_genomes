@@ -22,9 +22,9 @@ library(RColorBrewer)
 library(pheatmap)
 library(cowplot)
 library(tidyverse)
-library(rtracklayer)
+#library(rtracklayer)
 library(ComplexHeatmap)
-library("Biostrings")
+library(Biostrings)
 
 squish_trans <- function(from, to, factor) {
   
@@ -78,6 +78,13 @@ metadata = read.csv('../../metadata_20211015.csv') %>% select(ASSEMBLY,HUMAN_FLI
 pyseerdata = data_sub %>% as.data.frame %>% rownames_to_column("Gene")
 pyseermetadata = metadata %>% mutate(earth_space = if_else(grepl('MT',HUMAN_FLIGHT_OTHER),1,0)) %>% select(-HUMAN_FLIGHT_OTHER) %>% rownames_to_column('sample')
 
+# make spandx variable
+
+pyseersnipmetadata = read.table('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/revisions/snp_calling_spandx/spandx_samples_of_interest')
+colnames(pyseersnipmetadata) = c('sample','sample2')
+pyseersnipmetadata = left_join(pyseermetadata,pyseersnipmetadata) %>% select(-sample) %>% dplyr::rename(sample=sample2) %>% filter(!is.na(sample)) %>% select(sample,earth_space)
+
+write.table(pyseersnipmetadata,'~/Dropbox (Mason Lab)/space_genomes/ap_subproject/revisions/snp_calling_spandx/pyseer_snpmetadata.tsv',quote=F,row.names = F,sep='\t')
 write.table(pyseerdata,'pyseer_genedata.tsv',quote=F,row.names = F,sep='\t')
 write.table(pyseermetadata,'pyseer_metadata.tsv',quote=F,row.names = F,sep='\t')
 
@@ -300,3 +307,16 @@ p = ggtree(tree) + theme_tree2() + scale_x_ggtree()
 p2 = p %<+% labelmap + geom_tiplab(offset = 0,aes(label=newlabel),size = 5, parse = F)
 
 ggsave('apit_gubbins_snptree.pdf',height=6,width=6)
+
+####mGWAS OUTPUT
+setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/revisions/snp_calling_spandx/')
+
+regression_output = read.csv('mgwas_assoc',sep='\t') %>% dplyr::rename(term=variant) %>% mutate(ADJ = -log10(p.adjust(lrt.pvalue,method='bonferroni')))
+
+gff = readGFF('bonomo1.gff', version=0,columns=NULL, tags=NULL, filter=NULL, nrows=-1,raw_data=FALSE) %>% as.data.frame %>% dplyr::rename(CHR=seqid) %>% select(CHR,locus_tag,start,end,gene,product)
+
+
+regression_output = left_join(regression_output,merged %>% rownames_to_column('term'))
+
+regression_output = left_join(regression_output,prokkamap_prod)
+regression_output = left_join(regression_output,prokkamap_cog)
