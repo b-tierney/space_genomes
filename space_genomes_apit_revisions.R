@@ -14,6 +14,7 @@ library(tidyverse)
 library(broom)
 library(ggtree)
 library(scales)
+library(ggbeeswarm)
 library(tidyverse)
 library(ggrepel)
 library(ggnewscale)
@@ -150,7 +151,7 @@ colnames(prokkamap_prod) = c('term','product')
 prokkamap_cog = read.csv('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/gene_catalogs/gene_cog_mapping.tsv',sep='\t',header=F)
 colnames(prokkamap_cog) = c('term','COG')
 
-regression_output = read.csv('pyseer_output_5pcs.tsv',sep='\t') %>% dplyr::rename(term=variant) %>% mutate(ADJ = p.adjust(lrt.pvalue,method='bonferroni'))
+regression_output = read.csv('pyseer_output_5pcs.tsv',sep='\t') %>% dplyr::rename(term=variant) %>% mutate(ADJ = p.adjust(lrt.pvalue,method='BY'))
 regression_output = regression_output %>% mutate(odds_ratio = exp(beta))
 regression_output = regression_output %>% mutate(log_odds_ratio = log10(odds_ratio))
 
@@ -164,7 +165,7 @@ p = ggplot(data = regression_output,aes(x = beta,color=space_fraction,y = -log10
 ggsave(plot = p, 'volcano_5pcs.pdf',width=30,height=30)
 
 # build out gene significant location map
-regression_output = read.csv('pyseer_output_5pcs.tsv',sep='\t') %>% dplyr::rename(term=variant) %>% mutate(ADJ = p.adjust(lrt.pvalue,method='bonferroni'))
+regression_output = read.csv('pyseer_output_5pcs.tsv',sep='\t') %>% dplyr::rename(term=variant) %>% mutate(ADJ = p.adjust(lrt.pvalue,method='BY'))
 regression_output = left_join(regression_output,merged %>% rownames_to_column('term'))
 
 mappinginfo = read.csv('gene_presence_absence_space.csv',row.names=1)
@@ -173,16 +174,16 @@ for(g in gffstoload){
   gff = readGFF(paste('space_gffs/',g,'.gff',sep=''), version=0,columns=NULL, tags=NULL, filter=NULL, nrows=-1,raw_data=FALSE) %>% as.data.frame %>% dplyr::rename(CHR=seqid) %>% select(CHR,locus_tag,start,end,gene,product)
   mappinginfo_sub = mappinginfo %>% select(Gene,all_of(g)) %>% dplyr::rename(locus_tag=g,term=Gene)
   temp = left_join(gff,mappinginfo_sub)
-  temp = left_join(temp,regression_output %>% select(term,ADJ,space_fraction,earth_fraction)) %>% mutate(significant = if_else(ADJ<0.05,"Significant","0"))
+  temp = left_join(temp,regression_output %>% select(term,ADJ,beta,space_fraction,earth_fraction)) %>% mutate(significant = if_else(ADJ<0.05,"Significant","0"))
   temp$significant[temp$significant=='0']='Not significant'
   temp$significant[temp$product == 'hypothetical protein']='Significant hypothetical protein'
-  forplotsub = temp %>% arrange(CHR,start) %>% mutate(label =if_else(significant == 'Significant',product,''),axis = if_else(label!= '',as.character(start),'')) %>% select(CHR,start,end,axis,significant,label,ADJ,gene,product,space_fraction,earth_fraction)
+  forplotsub = temp %>% arrange(CHR,start) %>% mutate(label =if_else(significant == 'Significant',product,''),axis = if_else(label!= '',as.character(start),'')) %>% select(CHR,beta,start,end,axis,significant,label,ADJ,gene,product,space_fraction,earth_fraction)
   contigs = forplotsub %>% select(CHR,end) %>% group_by(CHR) %>% slice_max(end,n=1) %>% dplyr::rename(length=end)
   contigs = contigs%>% ungroup %>% mutate(start_position = cumsum(length)) %>% select(-length)
   contigs = contigs %>% mutate(start_position =start_position - min(start_position))
   forplotsub = left_join(forplotsub,contigs) %>% filter(!is.na(significant))
   forplotsub$`Genomic Coordinate` =   forplotsub$start +  forplotsub$start_position 
-  ggplot(forplotsub,aes(x=`Genomic Coordinate`,y=-log10(ADJ),color=significant))+ geom_point() +geom_label_repel(data = forplotsub %>% filter(!grepl('hypothetical',product)) %>% filter(ADJ<0.05,space_fraction == 1,earth_fraction<0.5) %>% arrange(ADJ) ,aes(label = gene),color='black',box.padding   = 0.1, point.padding = .1,alpha=.8,size=5,segment.color = 'grey50',label.padding = .1,min.segment.length = .1) + theme(axis.text.x = element_blank()) +theme_bw()+ geom_hline(yintercept = -log10(0.05)) 
+  ggplot(forplotsub,aes(x=`Genomic Coordinate`,color=beta,y=-log10(ADJ)))+ geom_point() +geom_label_repel(data = forplotsub %>% filter(!grepl('hypothetical',product)) %>% filter(ADJ<0.05,space_fraction == 1,earth_fraction<.25) %>% arrange(ADJ) ,aes(label = gene),color='black',box.padding   = 0.1, point.padding = .1,alpha=.8,size=5,segment.color = 'grey50',label.padding = .1,min.segment.length = .1) + theme(axis.text.x = element_blank()) +theme_bw()+ geom_hline(yintercept = -log10(0.05)) + scale_color_viridis_c(option = 'plasma')
   ggsave(paste('space_gffs/',g,'.pdf',sep=''),width=20,height=5)
 }
 
@@ -311,12 +312,110 @@ ggsave('apit_gubbins_snptree.pdf',height=6,width=6)
 ####mGWAS OUTPUT
 setwd('~/Dropbox (Mason Lab)/space_genomes/ap_subproject/revisions/snp_calling_spandx/')
 
-regression_output = read.csv('mgwas_assoc',sep='\t') %>% dplyr::rename(term=variant) %>% mutate(ADJ = -log10(p.adjust(lrt.pvalue,method='bonferroni')))
+# get reference contigs and lengths
 
+contig_lengths = read.table('contig_lengths',sep='\t',header=F)
+colnames(contig_lengths) = c('CHR','length')
+contig_lengths = contig_lengths %>% dplyr::mutate(contig_end = cumsum(length),contig_start = contig_end -length +1 ) 
+contig_lengths = contig_lengths %>%  group_by(CHR) %>% mutate(contig_start = contig_end-length)
+
+# load and parse gff
 gff = readGFF('bonomo1.gff', version=0,columns=NULL, tags=NULL, filter=NULL, nrows=-1,raw_data=FALSE) %>% as.data.frame %>% dplyr::rename(CHR=seqid) %>% select(CHR,locus_tag,start,end,gene,product)
 
+gff = left_join(gff,contig_lengths)
+gff$gene_start =   gff$start +  gff$contig_start 
+gff = gff %>% mutate(gene_length = end - start, gene_end = gene_start + gene_length) %>% dplyr::rename(internal_gene_start = start,internal_gene_end = end)
 
-regression_output = left_join(regression_output,merged %>% rownames_to_column('term'))
+# load and parse reg output
+regression_output = read.csv('mgwas_assoc',sep='\t') %>% dplyr::rename(term=variant) %>% mutate(ADJ = (p.adjust(lrt.pvalue,method='BY')),ADJ_l10 = -log10(p.adjust(lrt.pvalue,method='BY')))
 
-regression_output = left_join(regression_output,prokkamap_prod)
-regression_output = left_join(regression_output,prokkamap_cog)
+regression_output = regression_output %>% mutate(CHR = strsplit(term,'_') %>% map_chr(1),contig_loc = strsplit(term,'_') %>% map_chr(2),reference =  strsplit(term,'_') %>% map_chr(3), variant = strsplit(term,'_') %>% map_chr(4), type =if_else(str_length(reference)>1 | str_length(variant) > 1,'indel','snp'))
+
+regression_output = left_join(regression_output ,contig_lengths %>% select(CHR,contig_start,contig_end,length)) %>% mutate(POS = as.numeric(contig_loc) + contig_start)
+
+merged = dplyr::left_join(gff %>% select(-contig_start,-contig_end,-length), regression_output, by = c("CHR" = "CHR")) %>% filter(POS < gene_end & POS > gene_start)  %>% dplyr::rename(contig_length = length)
+# find integenic snps
+regression_output_int = regression_output %>% filter(!(term %in% merged$term)) 
+
+regression_output_with_coords = bind_rows(merged,regression_output_int) %>% mutate(Intergenic = if_else(is.na(locus_tag),'Intergenic','In CDS'))
+
+regression_output_with_coords = regression_output_with_coords %>% mutate(type = if_else(type == 'indel' & str_length(variant)<str_length(reference),'Deletion',if_else(type == 'indel' & str_length(reference)<str_length(variant),'Insertion',type))) %>% mutate(type = if_else(str_length(reference)==str_length(variant),'SNP',type))
+
+write.csv(regression_output_with_coords,'mgwas_output.csv',quote=F)
+
+# manhattan plot
+ggplot(data = regression_output_with_coords,aes(x=POS,y=-log10(ADJ),color=type)) + facet_grid(cols = vars(CHR))+ geom_quasirandom(alpha=.6,size=4)  + theme(axis.text.x = element_blank()) +theme_bw()+ geom_hline(yintercept = -log10(0.05)) + xlab('Position') + theme(axis.text.x= element_blank(),legend.position = 'bottom',legend.title = element_blank(),strip.text = element_blank(),strip.background = element_blank()) + scale_color_manual(values=brewer.pal(n=2,'Set1'))
+ggsave('manhattan_snp.pdf',width=18,height=5)
+
+# number significant indels vs snps 
+
+si = regression_output_with_coords%>% mutate(Significant = if_else(ADJ<0.05,'Yes','No')) %>% select(type,Significant) %>% table %>% data.frame
+colnames(si) = c('type','Significant','freq')
+si$type = toupper(si$type)
+ggplot(si,aes(x=type,y=freq,fill=Significant,group=Significant)) + geom_bar(stat='identity',position='dodge') + xlab('') + ylab('Number of features') + theme_bw() + theme(axis.text.x = element_text(hjust =1,angle = 60)) + geom_text(aes(label = freq,group = Significant), vjust = 0,position = position_dodge(.9)) + scale_fill_manual(values=c('grey','black')) + theme(legend.position = 'bottom')
+ggsave('indels.pdf',width=2,height=4)
+
+# number intergenic vs genic
+
+ig = regression_output_with_coords %>% mutate(Significant = if_else(ADJ<0.05,'Yes','No'))%>% select(Intergenic,Significant) %>% table %>% data.frame
+colnames(ig) = c('type','Significant','freq')
+ig$type = toupper(ig$type)
+ggplot(ig,aes(x=type,y=freq,fill=Significant,group=Significant)) + geom_bar(stat='identity',position='dodge') + xlab('') + ylab('Number of features') + theme_bw() + theme(axis.text.x = element_text(hjust =1,angle = 60)) + geom_text(aes(label = freq,group = Significant), vjust = 0,position = position_dodge(.9)) + scale_fill_manual(values=c('grey','black')) + theme(legend.position = 'bottom')
+ggsave('intergenic.pdf',width=3,height=4)
+
+# merged
+
+both = regression_output_with_coords %>% mutate(Significant = if_else(ADJ<0.05,'Yes','No'))%>% select(type,Intergenic,Significant) %>% table %>% data.frame
+colnames(both) = c('Type','Location','Significant','freq')
+#both$type = toupper(both$type)
+ggplot(both,aes(x=Location,y=freq,fill=Significant,group=Significant),color='black') + geom_bar(stat='identity',position='dodge') + facet_wrap(facets = vars(Type)) + xlab('') + ylab('Number of features') + theme_bw() + theme(axis.text.x = element_text(hjust =1,angle = 45)) + geom_text(aes(label = freq,group = Significant), vjust = 0,position = position_dodge(.9)) + scale_fill_manual(values=c('grey','black')) + theme(legend.position = 'bottom') 
+ggsave('merged_snpdata.pdf',width=9,height=6)
+
+# find genes with the most significant mutations
+freqplot = regression_output_with_coords %>% filter(Intergenic == 'In CDS')%>% filter(ADJ<0.05,beta>0) %>% select(CHR,internal_gene_start,internal_gene_end,locus_tag,product,gene_start,gene_end) %>% mutate(gene_pos = paste(comma(internal_gene_start),comma(internal_gene_end),sep='-'))  %>% group_by(CHR,locus_tag,product,gene_pos,gene_start) %>% count %>% ungroup %>% arrange(desc(n)) %>% mutate(label = paste(product,' (',gene_pos,')',sep='')) %>% arrange(gene_start) %>% filter(n>1)
+freqplot$label = fct_reorder(freqplot$label,freqplot$gene_start)
+freqplot$CHR = as.factor(freqplot$CHR)
+
+ggplot(freqplot,aes(x = label, y= n)) + theme_bw() +facet_grid(cols=vars(CHR),scales='free')+ geom_bar(stat='identity',position='dodge') + ylab('Number of significant mutations') + xlab('')  +  theme(axis.text.x = element_text(hjust =1,angle = 45))
+ggsave('mutation_freqplot.pdf',width = 9,height=6)
+
+# hypothetical protein = MNFGEKDL_02574, let's blast it and check it out
+
+# get the information for the 4 gene sequences of interest specifically and plot
+
+fa = readDNAStringSet("../snp_calling_snippy/bonomo1.ffn")
+names(fa) = strsplit(names(fa),' ') %>% map_chr(1)
+
+lociofint = unique(freqplot$locus_tag)
+
+outputseqs=list()
+for(l in lociofint){
+  seq = fa[[l]]
+  seq = strsplit(as.character(fa[[l]]),'')[[1]]
+  sub = regression_output_with_coords %>% filter(locus_tag == l) %>% select(variant,type,gene_length,product,gene_start,gene_end,POS)
+  prod = unique(sub$product)
+  start = unique(sub$gene_start)
+  end = unique(sub$gene_end)
+  length = sub$gene_length %>% unique
+  sub = sub %>% select(-gene_length)
+  temp = data.frame(seq(start,end),seq) 
+  colnames(temp) = c('POS','REFSEQ')
+  sub_exp = left_join(temp,sub,by='POS') %>% mutate(product = prod) %>% mutate(variant = if_else(is.na(variant),REFSEQ,variant), type = if_else(is.na(type),'None',type))
+  sub_exp$type = factor(sub_exp$type,levels= c('None','SNP','Insertion','Deletion'))
+  sub_exp = sub_exp  %>% mutate(variation = if_else(type =='None','Reference','Variant'))
+  sub_exp$variation = factor(sub_exp$variation,levels= c('Reference','Variant'))
+  ggplot(sub_exp,aes(x=POS,y=variation,color=type)) + geom_quasirandom(groupOnX = F,width = .07) + theme_bw() + scale_color_manual(values = c('gray','blue','red','darkgreen')) + xlab('Open Reading Frame position') + ylab('') + ggtitle(prod) + theme(axis.text.x = element_blank())
+  ggsave(paste(l,'variant_map.pdf',sep=''),width=8,height=2)
+  variantseq=gsub(', ','',toString(sub_exp$variant))
+  refseq=gsub(', ','',toString(sub_exp$REFSEQ))
+  outputseqs[[paste(l,'ref')]] = paste(sep='','>REF_',l,' ',prod)
+  outputseqs[[paste(l,'refseq')]] = refseq
+  outputseqs[[paste(l,'var')]] = paste(sep='','>VAR_',l,'',prod)
+  outputseqs[[paste(l,'varseq')]] = variantseq
+}
+
+writeLines(paste(outputseqs,sep='\n'),'seqs_snps_references_bonomo1.fa')
+
+
+
+
